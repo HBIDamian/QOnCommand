@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>QOnCommand</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'bounce-subtle': 'bounceSubtle 0.6s ease-out',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        bounceSubtle: {
+                            '0%, 20%, 50%, 80%, 100%': { transform: 'translateY(0)' },
+                            '40%': { transform: 'translateY(-4px)' },
+                            '60%': { transform: 'translateY(-2px)' },
+                        },
+                        glow: {
+                            '0%': { boxShadow: '0 0 5px rgba(59, 130, 246, 0.5)' },
+                            '100%': { boxShadow: '0 0 20px rgba(59, 130, 246, 0.8)' },
+                        }
+                    },
+                    backdropBlur: {
+                        xs: '2px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+            background-attachment: fixed;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        /* Fix mobile background scrolling issues */
+        @supports (-webkit-touch-callout: none) {
+            body {
+                background-attachment: scroll;
+                min-height: 100vh;
+                min-height: -webkit-fill-available;
+            }
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+        
+        .glass-effect:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+        
+        /* Prevent mobile footer inversion and scrolling issues */
+        @media screen and (max-width: 768px) {
+            html {
+                height: -webkit-fill-available;
+            }
+            
+            body {
+                min-height: 100vh;
+                min-height: -webkit-fill-available;
+                position: relative;
+                overflow-x: hidden;
+            }
+            
+            /* Fix iOS Safari viewport jumping */
+            .main-container {
+                min-height: 100vh;
+                min-height: -webkit-fill-available;
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+            
+            /* Prevent background inversion during scroll */
+            body::before {
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 120%;
+                background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+                z-index: -1;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white" style="min-height: 100vh; min-height: -webkit-fill-available;">
+    <!-- Main Container -->
+    <div class="main-container min-h-screen p-4 sm:p-6 lg:p-8" style="min-height: 100vh; min-height: -webkit-fill-available;">
+        <div class="max-w-7xl mx-auto">
+            
+            <!-- Header -->
+            <header class="text-center mb-8 sm:mb-12 animate-fade-in">
+                <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-3">
+                    QOnCommand
+                </h1>
+                <p class="text-slate-400 text-sm sm:text-base lg:text-lg font-light">
+                    A web-based remote control for Figure53's QLab
+                </p>
+            </header>
+
+            <!-- Workspace Selection Modal -->
+            <div id="workspace-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
+                <div class="glass-effect rounded-2xl p-6 sm:p-8 max-w-lg w-full animate-slide-up">
+                    
+                    <!-- Step 1: Select QLab Instance -->
+                    <div id="instance-step" class="step-content">
+                        <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                            Select QLab Instance
+                        </h2>
+                        <div id="instance-list" class="space-y-3 mb-6 max-h-64 overflow-y-auto overflow-x-hidden p-1">
+                            <!-- QLab instances will be populated here -->
+                        </div>
+                        <div class="flex gap-3">
+                            <button id="refresh-instances-btn" class="flex-1 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 hover:border-slate-500/50 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105">
+                                <span class="mr-2">🔄</span>Refresh
+                            </button>
+                            <button id="next-step-btn" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:transform hover:scale-105" disabled>
+                                Next →
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Select Workspace -->
+                    <div id="workspace-step" class="step-content hidden">
+                        <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                            Select Workspace
+                        </h2>
+                        <div class="mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-600/30">
+                            <div class="text-sm text-slate-300">Instance:</div>
+                            <div id="selected-instance-name" class="text-white font-medium">None</div>
+                        </div>
+                        <div id="workspace-list" class="space-y-3 mb-6 max-h-64 overflow-y-auto overflow-x-hidden p-1">
+                            <!-- Workspaces will be populated here -->
+                        </div>
+                        <div class="flex gap-3">
+                            <button id="back-step-btn" class="flex-1 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 hover:border-slate-500/50 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105">
+                                ← Back
+                            </button>
+                            <button id="connect-workspace-btn" class="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:transform hover:scale-105" disabled>
+                                Connect
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Grid Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+                
+                <!-- Left Column -->
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- Status Card -->
+                    <div class="glass-effect rounded-2xl p-6 sm:p-8 animate-fade-in">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+                            <h2 class="text-xl sm:text-2xl font-semibold text-white mb-4 sm:mb-0">Connection Status</h2>
+                            <div class="flex items-center space-x-3">
+                                <div id="status-indicator" class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+                                <span id="status-text" class="text-sm font-medium text-slate-300">Disconnected</span>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-slate-800/30 rounded-xl p-4 sm:p-6 border border-slate-700/30">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+                                <div class="mb-4 sm:mb-0">
+                                    <h3 class="text-lg font-medium text-white mb-1">Workspace</h3>
+                                    <p id="workspace-name" class="text-slate-400 text-sm">No workspace connected</p>
+                                </div>
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <button id="change-workspace-btn" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                                        Change Workspace
+                                    </button>
+                                    <button id="disconnect-btn" class="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500/50 hidden">
+                                        Disconnect
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="connection-status" class="bg-gradient-to-r from-red-600 to-rose-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm">
+                                Click "Change Workspace" to connect to QLab
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cue Information -->
+                    <div class="glass-effect rounded-2xl p-6 sm:p-8 animate-fade-in">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-xl sm:text-2xl font-semibold text-white">Cue Information</h2>
+                            <button id="refresh-cue-btn" class="bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 hover:border-slate-500/50 p-2 rounded-lg transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-slate-500/50" title="Refresh">
+                                <span class="text-slate-300 hover:text-white">♻</span>
+                            </button>
+                        </div>
+                        
+                        <!-- Current Cue -->
+                        <div class="bg-gradient-to-r from-blue-600/10 to-indigo-600/10 border border-blue-500/20 rounded-xl p-4 mb-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-blue-400 text-xs font-semibold uppercase tracking-wider">Current Selected</span>
+                                <span id="current-cue-type" class="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-md">Loading...</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div id="current-cue-number" class="text-2xl font-bold text-white">--</div>
+                                <div id="current-cue-name" class="text-sm text-slate-300 flex-1">Loading...</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Next Cue -->
+                        <div class="bg-gradient-to-r from-orange-600/10 to-amber-600/10 border border-orange-500/20 rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-orange-400 text-xs font-semibold uppercase tracking-wider">Next Cue</span>
+                                <span id="next-cue-type" class="text-xs bg-orange-500/20 text-orange-300 px-2 py-1 rounded-md">Loading...</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div id="next-cue-number" class="text-2xl font-bold text-white">--</div>
+                                <div id="next-cue-name" class="text-sm text-slate-300 flex-1">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Transport Controls -->
+                    <!-- Icons from: https://www.svgrepo.com/collection/solar-bold-icons/23 -->
+                    <div class="glass-effect rounded-2xl p-6 sm:p-8 animate-fade-in">
+                        <h2 class="text-xl sm:text-2xl font-semibold text-white mb-6">Transport Controls</h2>
+                        
+                        <div class="flex justify-center items-center gap-3 sm:gap-6">
+                            <!-- Previous -->
+                            <button id="prev-btn" class="group w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 rounded-xl sm:rounded-2xl border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50" title="Previous">
+                                <svg class="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 group-hover:text-white transition-colors duration-200" viewBox="0 0 24 24" fill="none">
+                                    <path d="M8.09015 14.6474C6.30328 13.4935 6.30328 10.5065 8.09015 9.35258L18.8792 2.38548C20.6158 1.26402 22.75 2.72368 22.75 5.0329V18.9671C22.75 21.2763 20.6158 22.736 18.8792 21.6145L8.09015 14.6474Z" fill="currentColor"/>
+                                    <path d="M2 5C2 4.58579 2.33579 4.25 2.75 4.25C3.16421 4.25 3.5 4.58579 3.5 5V19C3.5 19.4142 3.16421 19.75 2.75 19.75C2.33579 19.75 2 19.4142 2 19V5Z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                            
+                            <!-- Stop -->
+                            <button id="stop-btn" class="group w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 rounded-xl sm:rounded-2xl border border-red-500/50 hover:border-red-400/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500/50" title="Stop">
+                                <svg class="w-8 h-8 sm:w-10 sm:h-10 text-white transition-transform duration-200 group-hover:scale-110" viewBox="0 0 24 24" fill="none">
+                                  <path d="M2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C22 4.92893 22 7.28595 22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12Z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                            
+                            <!-- Play -->
+                            <button id="play-btn" class="group w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl sm:rounded-2xl border border-green-500/50 hover:border-green-400/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500/50" title="Play">
+                            <svg class="w-10 h-10 sm:w-12 sm:h-12 text-white transition-transform duration-200 group-hover:scale-110 ml-0.5" viewBox="0 0 24 24" fill="none">
+                              <path d="M21.4086 9.35258C23.5305 10.5065 23.5305 13.4935 21.4086 14.6474L8.59662 21.6145C6.53435 22.736 4 21.2763 4 18.9671L4 5.0329C4 2.72368 6.53435 1.26402 8.59661 2.38548L21.4086 9.35258Z" fill="currentColor"/>
+                            </svg>
+                            </button>
+                            
+                            <!-- Panic -->
+                            <button id="panic-btn" class="group w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 rounded-xl sm:rounded-2xl border border-orange-500/50 hover:border-orange-400/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500/50" title="Panic">
+                                <svg class="w-8 h-8 sm:w-10 sm:h-10 text-white transition-transform duration-200 group-hover:scale-110" viewBox="0 0 24 24" fill="none">
+                                    <path d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" fill="currentColor"/>
+                                    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 7.25C12.4142 7.25 12.75 7.58579 12.75 8V11.6893L15.0303 13.9697C15.3232 14.2626 15.3232 14.7374 15.0303 15.0303C14.7374 15.3232 14.2626 15.3232 13.9697 15.0303L11.4697 12.5303C11.329 12.3897 11.25 12.1989 11.25 12V8C11.25 7.58579 11.5858 7.25 12 7.25Z" fill="#1C274C"/>
+                                </svg>
+                            </button>
+                            
+                            <!-- Next -->
+                            <button id="next-btn" class="group w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 rounded-xl sm:rounded-2xl border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50" title="Next">
+                                <svg class="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 group-hover:text-white transition-colors duration-200" viewBox="0 0 24 24" fill="none">
+                                    <path d="M16.6598 14.6474C18.4467 13.4935 18.4467 10.5065 16.6598 9.35258L5.87083 2.38548C4.13419 1.26402 2 2.72368 2 5.0329V18.9671C2 21.2763 4.13419 22.736 5.87083 21.6145L16.6598 14.6474Z" fill="currentColor"/>
+                                    <path d="M22.75 5C22.75 4.58579 22.4142 4.25 22 4.25C21.5858 4.25 21.25 4.58579 21.25 5V19C21.25 19.4142 21.5858 19.75 22 19.75C22.4142 19.75 22.75 19.4142 22.75 19V5Z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Extended Controls -->
+                    <div class="glass-effect rounded-2xl p-6 sm:p-8 animate-fade-in">
+                        <h2 class="text-xl sm:text-2xl font-semibold text-white mb-6">Extended Controls</h2>
+                        
+                        <div class="space-y-4">
+                            <!-- Reset Button -->
+                            <div class="flex justify-center">
+                                <button id="reset-btn" class="bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 border border-slate-600/50 hover:border-slate-500/50 px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-slate-500/50">
+                                    <span class="mr-2">↻</span>Reset Workspace
+                                </button>
+                            </div>
+                            
+                            <!-- Cue Selection -->
+                            <div class="flex flex-col sm:flex-row gap-3 items-center justify-center">
+                                <div class="flex gap-2">
+                                    <select id="cue-select" class="w-48 sm:w-64 bg-slate-800/50 border border-slate-600/50 focus:border-blue-500/50 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-all duration-200 truncate">
+                                        <option value="">Select Cue</option>
+                                    </select>
+                                    <button id="load-cues-btn" class="flex-shrink-0 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50" title="Load Cue List">
+                                        <span class="text-lg">↻</span>
+                                    </button>
+                                </div>
+                                <button id="select-cue-btn" class="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500/50">
+                                    Select Cue
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div class="space-y-6">
+                    
+                    <!-- Network Information -->
+                    <div class="glass-effect rounded-2xl p-6 animate-fade-in">
+                        <h2 class="text-lg sm:text-xl font-semibold text-white mb-6">Network</h2>
+                        
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-slate-400">Private IP:</span>
+                                <span id="private-ip" class="text-xs font-medium text-white">192.168.1.x</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-slate-400">Port:</span>
+                                <span id="port" class="text-xs font-medium text-white">XXXX</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-slate-400">Node.js:</span>
+                                <span id="nodejs-version" class="text-xs font-medium text-white">v23.0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Performance -->
+                    <div class="glass-effect rounded-2xl p-6 animate-fade-in">
+                        <h2 class="text-lg sm:text-xl font-semibold text-white mb-6">Performance</h2>
+                        
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-slate-400">Avg Latency:</span>
+                                <span id="avg-latency" class="text-xs font-medium text-white">259.9ms</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-slate-400">Commands:</span>
+                                <span id="commands-sent" class="text-xs font-medium text-white">546</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-slate-400">Error Rate:</span>
+                                <span id="error-rate" class="text-xs font-medium text-green-400">0.0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Information -->
+                    <div class="glass-effect rounded-2xl p-6 animate-fade-in">
+                        <div class="text-center">
+                            <p class="text-xs text-slate-500">QOnCommand - A QLab Remote Control</p>
+                            <!-- Disclaimer -->
+                            <p class="text-xs text-slate-500 mt-1">Figure 53® and QLab® are registered trademarks of Figure 53, LLC. This project is not affiliated with with Figure 53, LLC and this application has not been reviewed nor is it approved by Figure 53, LLC.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class QOnCommand {
+            constructor() {
+                this.connected = false;
+                this.currentInstance = null;
+                this.socket = null;
+                this.socketId = null;
+                this.instances = [];
+                this.selectedInstanceIndex = null;
+                this.selectedWorkspaceId = null;
+                this.selectedWorkspaceName = null;
+                
+                this.initializeElements();
+                this.bindEvents();
+                this.initSocketListeners();
+                this.loadInitialData();
+            }
+            
+            initializeElements() {
+                // Status elements
+                this.statusIndicator = document.getElementById('status-indicator');
+                this.statusText = document.getElementById('status-text');
+                this.workspaceName = document.getElementById('workspace-name');
+                this.disconnectBtn = document.getElementById('disconnect-btn');
+                this.changeWorkspaceBtn = document.getElementById('change-workspace-btn');
+                this.connectionStatus = document.getElementById('connection-status');
+                
+                // Modal elements
+                this.workspaceModal = document.getElementById('workspace-modal');
+                this.instanceStep = document.getElementById('instance-step');
+                this.workspaceStep = document.getElementById('workspace-step');
+                this.instanceList = document.getElementById('instance-list');
+                this.workspaceList = document.getElementById('workspace-list');
+                this.selectedInstanceName = document.getElementById('selected-instance-name');
+                this.refreshInstancesBtn = document.getElementById('refresh-instances-btn');
+                this.nextStepBtn = document.getElementById('next-step-btn');
+                this.backStepBtn = document.getElementById('back-step-btn');
+                this.connectWorkspaceBtn = document.getElementById('connect-workspace-btn');
+                
+                // Current selections
+                this.selectedInstanceIndex = null;
+                this.selectedWorkspaceId = null;
+                
+                // Cue elements
+                this.currentCueNumber = document.getElementById('current-cue-number');
+                this.currentCueName = document.getElementById('current-cue-name');
+                this.currentCueType = document.getElementById('current-cue-type');
+                this.nextCueNumber = document.getElementById('next-cue-number');
+                this.nextCueName = document.getElementById('next-cue-name');
+                this.nextCueType = document.getElementById('next-cue-type');
+                this.refreshCueBtn = document.getElementById('refresh-cue-btn');
+                
+                // Transport controls
+                this.playBtn = document.getElementById('play-btn');
+                this.stopBtn = document.getElementById('stop-btn');
+                this.prevBtn = document.getElementById('prev-btn');
+                this.nextBtn = document.getElementById('next-btn');
+                this.panicBtn = document.getElementById('panic-btn');
+                this.resetBtn = document.getElementById('reset-btn');
+                
+                // Extended controls
+                this.cueSelect = document.getElementById('cue-select');
+                this.selectCueBtn = document.getElementById('select-cue-btn');
+                this.loadCuesBtn = document.getElementById('load-cues-btn');
+                
+                // Info elements
+                this.privateIp = document.getElementById('private-ip');
+                this.port = document.getElementById('port');
+                this.nodejsVersion = document.getElementById('nodejs-version');
+                this.avgLatency = document.getElementById('avg-latency');
+                this.commandsSent = document.getElementById('commands-sent');
+                this.errorRate = document.getElementById('error-rate');
+                
+                // Set initial button states
+                this.nextStepBtn.disabled = true;
+                this.connectWorkspaceBtn.disabled = true;
+            }
+            
+            bindEvents() {
+                // Connection events
+                this.disconnectBtn.addEventListener('click', () => {
+                    console.log('Disconnect button clicked');
+                    this.disconnect();
+                });
+                
+                this.changeWorkspaceBtn.addEventListener('click', () => {
+                    console.log('Change workspace button clicked');
+                    this.showWorkspaceModal();
+                });
+                
+                // Modal events
+                this.refreshInstancesBtn.addEventListener('click', () => {
+                    console.log('Refresh instances button clicked');
+                    this.refreshInstancesInModal();
+                });
+                
+                this.nextStepBtn.addEventListener('click', () => {
+                    console.log('Next step button clicked');
+                    this.showWorkspaceStep();
+                });
+                
+                this.backStepBtn.addEventListener('click', () => {
+                    console.log('Back step button clicked');
+                    this.showInstanceStep();
+                });
+                
+                this.connectWorkspaceBtn.addEventListener('click', () => {
+                    console.log('Connect workspace button clicked');
+                    this.connectSelectedWorkspace();
+                });
+                
+                // Close modal when clicking outside
+                this.workspaceModal.addEventListener('click', (e) => {
+                    if (e.target === this.workspaceModal) {
+                        this.hideWorkspaceModal();
+                    }
+                });
+                
+                // Transport controls with immediate feedback
+                this.playBtn.addEventListener('click', () => {
+                    console.log('Play button clicked');
+                    this.showButtonLoading('play');
+                    this.sendCommand('play');
+                });
+                this.stopBtn.addEventListener('click', () => {
+                    console.log('Stop button clicked');
+                    this.showButtonLoading('stop');
+                    this.sendCommand('stop');
+                });
+                this.prevBtn.addEventListener('click', () => {
+                    console.log('Previous button clicked');
+                    this.showButtonLoading('prev');
+                    this.sendCommand('previous');
+                });
+                this.nextBtn.addEventListener('click', () => {
+                    console.log('Next button clicked');
+                    this.showButtonLoading('next');
+                    this.sendCommand('next');
+                });
+                this.panicBtn.addEventListener('click', () => {
+                    console.log('Panic button clicked');
+                    this.showButtonLoading('panic');
+                    this.sendCommand('panic');
+                });
+                this.resetBtn.addEventListener('click', () => {
+                    console.log('Reset button clicked');
+                    this.showButtonLoading('reset');
+                    this.sendCommand('reset');
+                });
+                
+                // Cue controls
+                this.refreshCueBtn.addEventListener('click', () => {
+                    console.log('Refresh cue button clicked');
+                    this.updateCueInfo();
+                });
+                this.selectCueBtn.addEventListener('click', () => {
+                    console.log('Select cue button clicked');
+                    this.selectCue();
+                });
+                this.loadCuesBtn.addEventListener('click', () => {
+                    console.log('Load cues button clicked');
+                    this.loadCueList();
+                });
+            }
+            
+            async loadInitialData() {
+                // Load system info
+                this.privateIp.textContent = window.location.hostname;
+                this.port.textContent = window.location.port || '5000';
+                this.nodejsVersion.textContent = 'v23.0';
+                
+                // Clear performance history on page load and update display
+                try {
+                    const response = await fetch('/api/clear_performance', {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        // Update performance display immediately
+                        this.avgLatency.textContent = '0.0ms';
+                        this.commandsSent.textContent = '0';
+                        this.errorRate.textContent = '0.0%';
+                        console.log('Performance history cleared and display updated');
+                    }
+                } catch (error) {
+                    console.error('Failed to clear performance history:', error);
+                }
+                
+                // Set initial disconnected state
+                this.updateStatus('disconnected', 'Disconnected');
+                this.workspaceName.textContent = 'No workspace connected';
+                this.disconnectBtn.style.display = 'none';
+                this.updateCueDisplay(
+                    { number: '--', name: 'Not connected', type: 'unknown' },
+                    { number: '--', name: 'Not connected', type: 'unknown' }
+                );
+                
+                // Set initial status - not attempting to connect
+                this.connectionStatus.textContent = 'Click "Change Workspace" to connect to QLab';
+                this.connectionStatus.className = 'bg-gradient-to-r from-red-600 to-rose-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm';
+                
+                // Show change workspace button by default
+                this.changeWorkspaceBtn.style.display = 'block';
+            }
+            
+            async refreshInstances() {
+                try {
+                    const response = await fetch('/api/refresh_instances', {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.instances = data.instances || [];
+                        
+                        if (this.instances.length === 0) {
+                            this.updateStatus('disconnected', 'QLab not running');
+                        }
+                    } else {
+                        console.error('Failed to refresh instances:', data.error);
+                        this.updateStatus('disconnected', data.error);
+                    }
+                } catch (error) {
+                    console.error('Error refreshing instances:', error);
+                    this.updateStatus('disconnected', 'Connection error');
+                }
+            }
+            
+            async connectToInstance(instanceId) {
+                try {
+                    console.log(`Attempting to connect to instance ${instanceId}...`);
+                    const response = await fetch(`/api/connect/${instanceId}`, {
+                        method: 'POST',
+                        headers: this.getRequestHeaders()
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        console.log('Successfully connected to QLab workspace:', data);
+                        this.connected = true;
+                        this.currentInstance = data;
+                        this.updateStatus('connected', 'Connected');
+                        this.workspaceName.textContent = data.name;
+                        
+                        // Update connection status
+                        this.connectionStatus.textContent = 'QLab is running';
+                        this.connectionStatus.className = 'bg-gradient-to-r from-green-600 to-emerald-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm';
+                        
+                        // Update cue info immediately
+                        if (data.currentCue && data.nextCue) {
+                            this.updateCueDisplay(data.currentCue, data.nextCue);
+                        } else {
+                            // Fetch fresh cue info
+                            await this.updateCueInfo();
+                        }
+                        
+                        // Fetch cue list immediately after connection (fallback for real-time updates)
+                        this.fetchCueList();
+                        
+                        // Show disconnect button, hide change workspace button
+                        this.disconnectBtn.style.display = 'block';
+                        this.changeWorkspaceBtn.style.display = 'none';
+                    } else {
+                        console.error('Failed to connect:', data.error);
+                        this.updateStatus('disconnected', data.error);
+                        this.workspaceName.textContent = 'Connection failed';
+                        this.disconnectBtn.style.display = 'none';
+                        this.updateCueDisplay(
+                            { number: '--', name: 'Connection failed', type: 'unknown' },
+                            { number: '--', name: 'Connection failed', type: 'unknown' }
+                        );
+                    }
+                } catch (error) {
+                    console.error('Error connecting:', error);
+                    this.updateStatus('disconnected', 'Connection error');
+                    this.workspaceName.textContent = 'Connection error';
+                    this.disconnectBtn.style.display = 'none';
+                    this.updateCueDisplay(
+                        { number: '--', name: 'Connection error', type: 'unknown' },
+                        { number: '--', name: 'Connection error', type: 'unknown' }
+                    );
+                }
+            }
+            
+            async disconnect() {
+                try {
+                    const response = await fetch('/api/disconnect', {
+                        method: 'POST',
+                        headers: this.getRequestHeaders()
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.connected = false;
+                        this.currentInstance = null;
+                        this.updateStatus('disconnected', 'Disconnected');
+                        this.workspaceName.textContent = 'No workspace connected';
+                        
+                        // Update connection status
+                        this.connectionStatus.textContent = 'Click "Change Workspace" to connect to QLab';
+                        this.connectionStatus.className = 'bg-gradient-to-r from-red-600 to-rose-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm';
+                        
+                        // Show change workspace button, hide disconnect button
+                        this.disconnectBtn.style.display = 'none';
+                        this.changeWorkspaceBtn.style.display = 'block';
+                        
+                        // Reset cue display
+                        this.updateCueDisplay(
+                            { number: '--', name: 'Not connected', type: 'unknown' },
+                            { number: '--', name: 'Not connected', type: 'unknown' }
+                        );
+                        
+                        // Clear cue list
+                        this.cueSelect.innerHTML = '<option value="">Select Cue</option>';
+                    }
+                } catch (error) {
+                    console.error('Error disconnecting:', error);
+                }
+            }
+            
+            // Show immediate visual feedback for button presses
+            showButtonLoading(buttonType) {
+                const buttonMap = {
+                    'play': this.playBtn,
+                    'stop': this.stopBtn,
+                    'prev': this.prevBtn,
+                    'next': this.nextBtn,
+                    'panic': this.panicBtn,
+                    'reset': this.resetBtn
+                };
+                
+                const button = buttonMap[buttonType];
+                if (!button) return;
+                
+                // Find the SVG element
+                const svg = button.querySelector('svg');
+                if (!svg) return;
+                
+                // Store original SVG
+                const originalSVG = svg.outerHTML;
+                
+                // Show loading spinner
+                svg.outerHTML = `<div class="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-white">⏳</div>`;
+                button.disabled = true;
+                button.style.opacity = '0.7';
+                
+                // Reset after short delay
+                setTimeout(() => {
+                    const spinner = button.querySelector('div');
+                    if (spinner) {
+                        spinner.outerHTML = originalSVG;
+                    }
+                    button.disabled = false;
+                    button.style.opacity = '1';
+                }, 300); // Quick visual feedback
+            }
+
+            // Helper method to create headers with client ID
+            getRequestHeaders() {
+                return {
+                    'Content-Type': 'application/json',
+                    'X-Client-Id': this.socketId || 'default'
+                };
+            }
+
+            async sendCommand(command) {
+                if (!this.connected) {
+                    alert('Not connected to QLab');
+                    return;
+                }
+
+                try {
+                    // Send command without waiting for response to make UI feel instant
+                    fetch(`/api/command/${command}`, {
+                        method: 'POST',
+                        headers: this.getRequestHeaders()
+                    }).then(response => response.json()).then(data => {
+                        if (!data.success) {
+                            console.error(`Command ${command} failed:`, data.error);
+                        }
+                    }).catch(error => {
+                        console.error(`Error sending command ${command}:`, error);
+                    });
+                } catch (error) {
+                    console.error(`Error sending command ${command}:`, error);
+                }
+            }
+            
+            async selectCue() {
+                const cueId = this.cueSelect.value;
+                if (!cueId) {
+                    alert('Please select a cue');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/skip', {
+                        method: 'POST',
+                        headers: this.getRequestHeaders(),
+                        body: JSON.stringify({ cue: cueId })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        console.log('Successfully selected cue');
+                    } else {
+                        console.error('Failed to select cue:', data.error);
+                        alert(`Failed to select cue: ${data.error}`);
+                    }
+                } catch (error) {
+                    console.error('Error selecting cue:', error);
+                    alert(`Error: ${error.message}`);
+                }
+            }
+            
+            async updateCueInfo() {
+                if (!this.connected) return;
+                
+                try {
+                    const response = await fetch('/api/cue_info');
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.updateCueDisplay(data.current, data.next);
+                    }
+                } catch (error) {
+                    console.error('Error updating cue info:', error);
+                }
+            }
+            
+            // Load cue list manually with user feedback
+            async loadCueList() {
+                if (!this.connected) {
+                    alert('Not connected to QLab');
+                    return;
+                }
+                
+                // Show loading state
+                this.loadCuesBtn.disabled = true;
+                this.loadCuesBtn.innerHTML = '<span class="text-lg">⏳</span>';
+                
+                try {
+                    await this.fetchCueList();
+                } finally {
+                    // Restore button state
+                    this.loadCuesBtn.disabled = false;
+                    this.loadCuesBtn.innerHTML = '<span class="text-lg">↻</span>';
+                }
+            }
+            
+            // Fetch cue list from server
+            async fetchCueList() {
+                try {
+                    const response = await fetch('/api/cues', {
+                        headers: this.getRequestHeaders()
+                    });
+                    const data = await response.json();
+                    
+                    if (data.cues && data.cues.length > 0) {
+                        this.populateCueList(data.cues);
+                        console.log(`Fetched ${data.cues.length} cues for scene selector`);
+                        return true;
+                    } else {
+                        console.log('No cues received, attempting connection recovery...');
+                        // Try to restore connection if no cues received
+                        if (!this.connected) {
+                            await this.attemptDirectConnection();
+                            // Retry after connection attempt
+                            const retryResponse = await fetch('/api/cues', {
+                                headers: this.getRequestHeaders()
+                            });
+                            const retryData = await retryResponse.json();
+                            if (retryData.cues && retryData.cues.length > 0) {
+                                this.populateCueList(retryData.cues);
+                                console.log(`Fetched ${retryData.cues.length} cues after recovery`);
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('Error fetching cue list:', error);
+                    // Try connection recovery on error
+                    try {
+                        await this.attemptDirectConnection();
+                        console.log('Connection recovery attempted');
+                    } catch (recoveryError) {
+                        console.error('Connection recovery failed:', recoveryError);
+                        alert('Failed to load cue list and recover connection');
+                    }
+                    return false;
+                }
+            }
+            
+            // Populate cue select dropdown
+            populateCueList(cues) {
+                this.cueSelect.innerHTML = '<option value="">Select Cue</option>';
+                cues.forEach(cue => {
+                    const option = document.createElement('option');
+                    option.value = cue.id;
+                    option.textContent = `${cue.number} - ${cue.originalName}`;
+                    this.cueSelect.appendChild(option);
+                });
+            }
+            
+            updateCueDisplay(current, next) {
+                // Check if we're disconnected and show appropriate message
+                if (!this.connected) {
+                    this.currentCueNumber.textContent = '--';
+                    this.currentCueName.textContent = 'Not connected';
+                    this.currentCueType.textContent = 'unknown';
+                    this.currentCueType.className = 'text-xs bg-slate-500/20 text-slate-300 px-2 py-1 rounded-md';
+                    
+                    this.nextCueNumber.textContent = '--';
+                    this.nextCueName.textContent = 'Not connected';
+                    this.nextCueType.textContent = 'unknown';
+                    this.nextCueType.className = 'text-xs bg-slate-500/20 text-slate-300 px-2 py-1 rounded-md';
+                    return;
+                }
+                
+                // Update current cue
+                this.currentCueNumber.textContent = current.number || '--';
+                this.currentCueName.textContent = current.name || 'Unknown';
+                
+                // Update current cue type label
+                const currentType = (current.type || 'unknown').toLowerCase();
+                this.currentCueType.textContent = currentType;
+                this.currentCueType.className = currentType === 'audio' ? 'text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-md' : 'text-xs bg-slate-500/20 text-slate-300 px-2 py-1 rounded-md';
+                
+                // Update next cue
+                this.nextCueNumber.textContent = next.number || '--';
+                this.nextCueName.textContent = next.name || 'Unknown';
+                
+                // Update next cue type label
+                const nextType = (next.type || 'unknown').toLowerCase();
+                this.nextCueType.textContent = nextType;
+                this.nextCueType.className = nextType === 'audio' ? 'text-xs bg-orange-500/20 text-orange-300 px-2 py-1 rounded-md' : 'text-xs bg-slate-500/20 text-slate-300 px-2 py-1 rounded-md';
+            }
+            
+            updateStatus(status, text) {
+                if (status === 'connected') {
+                    this.statusIndicator.className = 'w-3 h-3 rounded-full bg-green-500 animate-pulse';
+                    this.statusText.className = 'text-sm font-medium text-green-400';
+                } else {
+                    this.statusIndicator.className = 'w-3 h-3 rounded-full bg-red-500 animate-pulse';
+                    this.statusText.className = 'text-sm font-medium text-slate-300';
+                }
+                this.statusText.textContent = text;
+            }
+            
+            // Initialize Socket.io listeners for real-time updates
+            initSocketListeners() {
+                this.socket = io();
+                // Handle socket connection events
+                this.socket.on('connect', () => {
+                    this.socketId = this.socket.id;
+                    console.log(`Socket.io connected to server with ID: ${this.socketId}`);
+                    
+                    // If we were previously connected, try to restore connection
+                    if (this.connected && this.currentInstance) {
+                        console.log('Attempting to restore QLab connection after socket reconnect...');
+                        this.attemptDirectConnection();
+                    }
+                });
+                this.socket.on('disconnect', () => {
+                    console.log('Socket.io disconnected from server');
+                    // Mark as disconnected but don't reset UI completely - allow for reconnection
+                    this.updateStatus('disconnected', 'Reconnecting...');
+                });
+                // Receive server info once
+                this.socket.on('serverInfo', ({ ip, port, nodeVersion }) => {
+                    this.privateIp.textContent = ip;
+                    this.port.textContent = port;
+                    this.nodejsVersion.textContent = nodeVersion;
+                });
+                // Listen for cue info updates
+                this.socket.on('cueInfo', ({ current, next }) => {
+                    // Only update cue info if we're connected to QLab
+                    if (this.connected) {
+                        this.updateCueDisplay(current, next);
+                    }
+                });
+                // Listen for performance updates
+                this.socket.on('performance', data => {
+                    this.avgLatency.textContent = `${data.average_latency}ms`;
+                    this.commandsSent.textContent = data.commands_sent;
+                    this.errorRate.textContent = `${data.error_rate}%`;
+                });
+                // Listen for cue list updates
+                this.socket.on('cueList', ({ cues }) => {
+                    this.populateCueList(cues);
+                });
+            }
+            
+            // Workspace Modal Functions
+            showWorkspaceModal() {
+                console.log('Opening workspace modal');
+                this.workspaceModal.classList.remove('hidden');
+                this.showInstanceStep();
+            }
+            
+            hideWorkspaceModal() {
+                this.workspaceModal.classList.add('hidden');
+                this.selectedInstanceIndex = null;
+                this.selectedWorkspaceId = null;
+                this.selectedWorkspaceName = null;
+                this.connectWorkspaceBtn.disabled = true;
+            }
+            
+            showInstanceStep() {
+                console.log('Showing instance step');
+                this.instanceStep.classList.remove('hidden');
+                this.workspaceStep.classList.add('hidden');
+                this.refreshInstancesInModal();
+            }
+            
+            showWorkspaceStep() {
+                console.log('Showing workspace step, selectedInstanceIndex:', this.selectedInstanceIndex);
+                if (this.selectedInstanceIndex === null) return;
+                
+                this.instanceStep.classList.add('hidden');
+                this.workspaceStep.classList.remove('hidden');
+                
+                // Update the selected instance name display
+                const selectedInstance = this.instances[this.selectedInstanceIndex];
+                console.log('Selected instance:', selectedInstance);
+                this.selectedInstanceName.textContent = selectedInstance ? selectedInstance.name : 'Unknown Instance';
+                
+                this.refreshWorkspacesInModal();
+            }
+            
+            async refreshInstancesInModal() {
+                this.instanceList.innerHTML = '<div class="text-center text-slate-400 py-4">Loading instances...</div>';
+                
+                await this.refreshInstances();
+                
+                console.log('Instances loaded:', this.instances);
+                this.instanceList.innerHTML = '';
+                
+                if (this.instances.length === 0) {
+                    this.instanceList.innerHTML = '<div class="text-center text-red-400 py-4">QLab not running or no instances found</div>';
+                    return;
+                }
+                
+                this.instances.forEach((instance, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'instance-option group p-4 border border-slate-600/50 hover:border-blue-400/60 bg-slate-800/30 hover:bg-slate-700/50 rounded-xl cursor-pointer transition-all duration-200 hover:transform hover:scale-[1.01]';
+                    div.innerHTML = `
+                        <div class="font-medium text-white group-hover:text-blue-100 transition-colors duration-200">${instance.name}</div>
+                        <div class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors duration-200">${instance.ip || 'localhost'}</div>
+                    `;
+                    div.addEventListener('click', () => {
+                        // Remove selection from other options
+                        this.instanceList.querySelectorAll('.instance-option').forEach(opt => {
+                            opt.classList.remove('border-blue-500/50', 'bg-blue-600/20', '!border-blue-500', '!bg-blue-600/30');
+                            opt.classList.add('border-slate-600/50');
+                        });
+                        
+                        // Select this option
+                        div.classList.remove('border-slate-600/50');
+                        div.classList.add('!border-blue-500', '!bg-blue-600/30');
+                        
+                        this.selectedInstanceIndex = index;
+                        this.nextStepBtn.disabled = false;
+                    });
+                    
+                    this.instanceList.appendChild(div);
+                });
+            }
+            
+            async refreshWorkspacesInModal() {
+                if (this.selectedInstanceIndex === null) return;
+                
+                this.workspaceList.innerHTML = '<div class="text-center text-slate-400 py-4">Loading workspaces...</div>';
+                
+                try {
+                    const response = await fetch(`/api/instances/${this.selectedInstanceIndex}/workspaces`, {
+                        headers: this.getRequestHeaders()
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    this.workspaceList.innerHTML = '';
+                    
+                    if (!data.workspaces || data.workspaces.length === 0) {
+                        this.workspaceList.innerHTML = '<div class="text-center text-red-400 py-4">No workspaces found on this instance</div>';
+                        return;
+                    }
+                    
+                    data.workspaces.forEach((workspace, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'workspace-option group p-4 border border-slate-600/50 hover:border-blue-400/60 bg-slate-800/30 hover:bg-slate-700/50 rounded-xl cursor-pointer transition-all duration-200 hover:transform hover:scale-[1.01]';
+                        div.innerHTML = `
+                            <div class="font-medium text-white group-hover:text-blue-100 transition-colors duration-200">${workspace.name || workspace.id}</div>
+                            <div class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors duration-200">ID: ${workspace.id}</div>
+                        `;
+                        div.addEventListener('click', () => {
+                            // Remove selection from other options
+                            this.workspaceList.querySelectorAll('.workspace-option').forEach(opt => {
+                                opt.classList.remove('border-blue-500/50', 'bg-blue-600/20', '!border-blue-500', '!bg-blue-600/30');
+                                opt.classList.add('border-slate-600/50');
+                            });
+                            
+                            // Select this option
+                            div.classList.remove('border-slate-600/50');
+                            div.classList.add('!border-blue-500', '!bg-blue-600/30');
+                            
+                            this.selectedWorkspaceId = workspace.id;
+                            this.selectedWorkspaceName = workspace.name;
+                            this.connectWorkspaceBtn.disabled = false;
+                        });
+                        
+                        this.workspaceList.appendChild(div);
+                    });
+                } catch (error) {
+                    console.error('Failed to load workspaces:', error);
+                    this.workspaceList.innerHTML = '<div class="text-center text-red-400 py-4">Failed to load workspaces</div>';
+                }
+            }
+            
+            async connectSelectedWorkspace() {
+                if (this.selectedInstanceIndex === null || this.selectedWorkspaceId === null) return;
+                
+                this.connectWorkspaceBtn.disabled = true;
+                this.connectWorkspaceBtn.textContent = 'Connecting...';
+                
+                try {
+                    const response = await fetch(`/api/connect/${this.selectedInstanceIndex}/${this.selectedWorkspaceId}`, {
+                        method: 'POST',
+                        headers: this.getRequestHeaders()
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        console.log('Successfully connected to QLab workspace:', data);
+                        this.connected = true;
+                        this.currentInstance = data;
+                        this.updateStatus('connected', 'Connected');
+                        
+                        // Get device and workspace names
+                        const deviceName = this.instances[this.selectedInstanceIndex].name;
+                        const workspaceName = this.selectedWorkspaceName || 'Unknown Workspace';
+                        const workspaceUUID = this.selectedWorkspaceId;
+                        
+                        // Update workspace display with device name, workspace name, and UUID
+                        this.workspaceName.innerHTML = `
+                            <div class="font-medium text-white">${deviceName}</div>
+                            <div class="text-sm text-slate-300">${workspaceName}</div>
+                            <div class="text-xs text-slate-400 font-mono">${workspaceUUID}</div>
+                        `;
+                        
+                        // Update connection status
+                        this.connectionStatus.textContent = 'QLab is running';
+                        this.connectionStatus.className = 'bg-gradient-to-r from-green-600 to-emerald-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm';
+                        
+                        this.hideWorkspaceModal();
+                        this.loadCueList();
+                    } else {
+                        throw new Error(data.error || 'Connection failed');
+                    }
+                } catch (error) {
+                    console.error('Failed to connect to workspace:', error);
+                    alert('Failed to connect to workspace: ' + error.message);
+                } finally {
+                    this.connectWorkspaceBtn.disabled = false;
+                    this.connectWorkspaceBtn.textContent = 'Connect';
+                }
+            }
+            
+            async attemptDirectConnection() {
+                try {
+                    // Try connecting directly using the new endpoint
+                    const response = await fetch('/api/connect_direct', {
+                        method: 'POST',
+                        headers: this.getRequestHeaders()
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            this.connected = true;
+                            this.currentInstance = {
+                                name: data.name,
+                                ip: data.ip,
+                                workspace_id: data.workspace_id
+                            };
+                            this.updateStatus('connected', `Connected to ${data.name}`);
+                            this.workspaceName.textContent = data.name;
+                            this.connectionStatus.textContent = 'Connected to QLab';
+                            this.connectionStatus.className = 'bg-green-600 text-center py-2 px-4 rounded text-white font-medium';
+                            this.disconnectBtn.style.display = 'inline-block';
+                            this.changeWorkspaceBtn.style.display = 'none';
+                            
+                            // Update cue display
+                            this.updateCueDisplay(data.currentCue, data.nextCue);
+                            
+                            // Fetch cue list immediately after connection (fallback for real-time updates)
+                            this.fetchCueList();
+                            
+                            console.log('Successfully connected to QLab');
+                        } else {
+                            throw new Error(data.error || 'Connection failed');
+                        }
+                    } else {
+                        throw new Error('HTTP error: ' + response.status);
+                    }
+                } catch (error) {
+                    console.error('Direct connection failed:', error);
+                    this.connectionStatus.textContent = 'QLab not available - Click "Change Workspace" to retry';
+                    this.connectionStatus.className = 'bg-red-600 text-center py-2 px-4 rounded text-white font-medium';
+                    this.changeWorkspaceBtn.style.display = 'inline-block';
+                }
+            }
+        }
+        
+        // Initialize the application when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new QOnCommand();
+        });
+    </script>
+</body>
+</html>
