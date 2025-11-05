@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Utility
     checkPortAvailable: (port) => ipcRenderer.invoke('check-port-available', port),
     showMessageBox: (options) => ipcRenderer.invoke('show-message-box', options),
+    getLocalIP: () => ipcRenderer.invoke('get-local-ip'),
+    refreshLocalIP: () => ipcRenderer.invoke('get-local-ip'), // Refresh IP address
 
     // Event listeners
     onServerStatus: (callback) => {

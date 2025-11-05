@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>QOnCommand</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'bounce-subtle': 'bounceSubtle 0.6s ease-out',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        bounceSubtle: {
+                            '0%, 20%, 50%, 80%, 100%': { transform: 'translateY(0)' },
+                            '40%': { transform: 'translateY(-4px)' },
+                            '60%': { transform: 'translateY(-2px)' },
+                        },
+                        glow: {
+                            '0%': { boxShadow: '0 0 5px rgba(59, 130, 246, 0.5)' },
+                            '100%': { boxShadow: '0 0 20px rgba(59, 130, 246, 0.8)' },
+                        }
+                    },
+                    backdropBlur: {
+                        xs: '2px',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        html, body {
+            background: #0f172a; /* Immediate dark background to prevent white flash */
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            opacity: 0; /* Hide initially */
+            transition: opacity 0.5s ease-in-out;
+        }
+
+
+        
+        body.loaded {
+            opacity: 1; /* Show when loaded */
+        }
+
+        #loading-overlay {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+            transition: opacity 0.3s ease-out;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+        
+        .glass-effect:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status-running { background: #10b981; }
+        .status-stopped { background: #ef4444; }
+        .status-starting { background: #f59e0b; }
+
+        /* Fix iOS Safari viewport */
+        .main-container {
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+        }
+        
+        /* Prevent background inversion */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 120%;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+            z-index: -1;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white">
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <div class="text-white text-lg">Loading QOnCommand...</div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-md">
+            
+            <!-- Main Launcher Card -->
+            <div class="glass-effect rounded-2xl p-8 animate-fade-in">
+                
+                <!-- Header -->
+                <div class="text-center mb-8">
+                    <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-3">
+                        QOnCommand
+                    </h1>
+                    <p class="text-slate-400 text-sm font-light">
+                        Professional QLab Remote Control
+                    </p>
+                </div>
+
+                <!-- Local IP Display -->
+                <div class="mb-6">
+                    <div class="glass-effect rounded-xl p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="text-slate-400 text-xs font-medium uppercase tracking-wide">Local IP Address</div>
+                            <button 
+                                id="refresh-ip-btn" 
+                                class="text-slate-400 hover:text-white transition-colors text-xs bg-slate-700/30 hover:bg-slate-600/50 px-2 py-1 rounded-md"
+                                title="Refresh IP Address"
+                            >
+                                ↻ Refresh
+                            </button>
+                        </div>
+                        <div id="local-ip" class="text-lg font-mono text-white text-center">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Server Status -->
+                <div class="mb-6">
+                    <div class="glass-effect rounded-xl p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <span id="status-indicator" class="status-indicator status-stopped"></span>
+                                <span id="status-text" class="text-sm font-medium">Server Stopped</span>
+                            </div>
+                            <div id="server-url" class="text-xs text-slate-400"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="mb-6">
+                    <!-- Port Configuration -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Port</label>
+                        <input 
+                            type="number" 
+                            id="port-input" 
+                            min="1024" 
+                            max="65535" 
+                            value="7522"
+                            class="w-full px-4 py-3 bg-slate-800/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
+                            placeholder="7522"
+                        >
+                    </div>
+                    
+                    <!-- Browser Toggle -->
+                    <div class="flex items-center justify-between glass-effect rounded-xl p-4">
+                        <div>
+                            <div class="text-sm font-medium text-slate-300">Open Browser on Start</div>
+                            <div class="text-xs text-slate-400">Automatically open web interface when server starts</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="browser-toggle" class="sr-only peer">
+                            <div class="relative w-11 h-6 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Server Control -->
+                <div class="mb-6">
+                    <button 
+                        id="toggle-server-btn" 
+                        class="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 disabled:from-slate-600 disabled:to-slate-700 px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:transform-none disabled:cursor-not-allowed"
+                        disabled
+                    >
+                        <span id="toggle-btn-text">Start Server</span>
+                    </button>
+                </div>
+
+                <!-- Open Web Interface Button (when server is running) -->
+                <div id="web-interface-section" class="mb-6 hidden">
+                    <button 
+                        id="open-web-btn" 
+                        class="w-full bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 hover:border-slate-500/50 px-6 py-3 rounded-xl font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-slate-500/50"
+                    >
+                        Open Web Interface
+                    </button>
+                </div>
+
+                <!-- Status Logs -->
+                <div id="logs-section" class="hidden">
+                    <div class="glass-effect rounded-xl p-4 max-h-32 overflow-y-auto">
+                        <div class="text-xs font-medium text-slate-400 mb-2">Status</div>
+                        <div id="status-log" class="space-y-1 text-xs font-mono"></div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="mt-8 pt-4 border-t border-slate-700/50 text-center">
+                    <p class="text-xs text-slate-500">
+                        Figure 53® and QLab® are registered trademarks of Figure 53, LLC.
+                    </p>
+                    <p class="text-xs text-slate-500 mt-1">
+                        QOnCommand is not affiliated with Figure 53, LLC.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class QOnCommandLauncher {
+            constructor() {
+                this.serverRunning = false;
+                this.localIP = 'Loading...';
+                this.currentPort = 7522;
+                this.initializationComplete = false;
+                
+                this.initializeElements();
+                this.bindEvents();
+                this.initialize();
+            }
+
+            async initialize() {
+                const startTime = Date.now();
+                const minLoadingTime = 800; // Minimum loading time in ms for better UX
+                
+                try {
+                    // Initialize all components
+                    await this.loadSettings();
+                    await this.getLocalIP();
+                    await this.updateServerStatus();
+                    
+                    // Set up periodic status updates
+                    setInterval(() => this.updateServerStatus(), 2000);
+                    
+                    // Ensure minimum loading time for smooth experience
+                    const elapsed = Date.now() - startTime;
+                    const remainingTime = Math.max(0, minLoadingTime - elapsed);
+                    
+                    setTimeout(() => {
+                        // Mark initialization as complete and show the UI
+                        this.initializationComplete = true;
+                        this.showLauncher();
+                    }, remainingTime);
+                    
+                } catch (error) {
+                    console.error('Initialization error:', error);
+                    // Show launcher even if there are errors, after minimum time
+                    const elapsed = Date.now() - startTime;
+                    const remainingTime = Math.max(0, minLoadingTime - elapsed);
+                    
+                    setTimeout(() => {
+                        this.showLauncher();
+                    }, remainingTime);
+                }
+            }
+
+            showLauncher() {
+                // Hide loading overlay
+                const loadingOverlay = document.getElementById('loading-overlay');
+                if (loadingOverlay) {
+                    loadingOverlay.style.opacity = '0';
+                    setTimeout(() => {
+                        loadingOverlay.style.display = 'none';
+                    }, 300);
+                }
+                
+                // Add loaded class to body to trigger fade-in
+                document.body.classList.add('loaded');
+            }
+
+            initializeElements() {
+                this.toggleBtn = document.getElementById('toggle-server-btn');
+                this.toggleBtnText = document.getElementById('toggle-btn-text');
+                this.openWebBtn = document.getElementById('open-web-btn');
+                this.statusIndicator = document.getElementById('status-indicator');
+                this.statusText = document.getElementById('status-text');
+                this.serverUrl = document.getElementById('server-url');
+                this.portInput = document.getElementById('port-input');
+                this.localIpDisplay = document.getElementById('local-ip');
+                this.refreshIpBtn = document.getElementById('refresh-ip-btn');
+                this.browserToggle = document.getElementById('browser-toggle');
+                this.webInterfaceSection = document.getElementById('web-interface-section');
+                this.logsSection = document.getElementById('logs-section');
+                this.statusLog = document.getElementById('status-log');
+            }
+
+            bindEvents() {
+                this.toggleBtn.addEventListener('click', () => this.toggleServer());
+                this.openWebBtn.addEventListener('click', () => this.openWebInterface());
+                this.portInput.addEventListener('change', () => this.saveSettings());
+                this.refreshIpBtn.addEventListener('click', () => this.refreshLocalIP());
+                this.browserToggle.addEventListener('change', () => this.saveSettings());
+
+                // Server status listener
+                if (window.electronAPI) {
+                    window.electronAPI.onServerStatus((event, data) => {
+                        this.handleServerStatusUpdate(data);
+                    });
+
+                    window.electronAPI.onServerLog((event, data) => {
+                        this.addLogEntry(data);
+                    });
+                }
+            }
+
+            async loadSettings() {
+                if (window.electronAPI) {
+                    try {
+                        const settings = await window.electronAPI.getSettings();
+                        this.currentPort = settings.port || 7522;
+                        this.portInput.value = this.currentPort;
+                        this.browserToggle.checked = settings.openBrowserOnStart || false;
+                        this.updateServerUrl();
+                    } catch (error) {
+                        console.error('Failed to load settings:', error);
+                        if (this.initializationComplete) {
+                            this.addLogEntry({ message: 'Failed to load settings', level: 'error' });
+                        }
+                    }
+                }
+                this.toggleBtn.disabled = false;
+            }
+
+            async saveSettings() {
+                const newPort = parseInt(this.portInput.value);
+                
+                if (newPort < 1024 || newPort > 65535) {
+                    this.addLogEntry({ message: 'Port must be between 1024 and 65535', level: 'error' });
+                    this.portInput.value = this.currentPort;
+                    return;
+                }
+
+                const newSettings = {
+                    port: newPort,
+                    logLevel: 'info',
+                    autoStart: false,
+                    openBrowserOnStart: this.browserToggle.checked
+                };
+
+                if (window.electronAPI) {
+                    try {
+                        await window.electronAPI.saveSettings(newSettings);
+                        this.currentPort = newPort;
+                        this.updateServerUrl();
+                        this.addLogEntry({ message: `Settings saved - Port: ${newPort}, Browser Auto-open: ${this.browserToggle.checked ? 'On' : 'Off'}`, level: 'info' });
+                    } catch (error) {
+                        console.error('Failed to save settings:', error);
+                        this.addLogEntry({ message: 'Failed to save settings', level: 'error' });
+                        this.portInput.value = this.currentPort;
+                    }
+                }
+            }
+
+            async toggleServer() {
+                if (this.serverRunning) {
+                    await this.stopServer();
+                } else {
+                    await this.startServer();
+                }
+            }
+
+            async startServer() {
+                if (window.electronAPI) {
+                    try {
+                        this.toggleBtn.disabled = true;
+                        this.toggleBtnText.textContent = 'Starting...';
+                        this.updateStatus('starting', 'Server Starting...');
+                        this.addLogEntry({ message: 'Starting server...', level: 'info' });
+                        
+                        const result = await window.electronAPI.startServer();
+                        if (result.success) {
+                            this.addLogEntry({ message: 'Server started successfully', level: 'info' });
+                        } else {
+                            this.addLogEntry({ message: `Failed to start server: ${result.error}`, level: 'error' });
+                            this.toggleBtn.disabled = false;
+                            this.toggleBtnText.textContent = 'Start Server';
+                            this.updateStatus('stopped', 'Server Stopped');
+                        }
+                    } catch (error) {
+                        this.addLogEntry({ message: `Error starting server: ${error.message}`, level: 'error' });
+                        this.toggleBtn.disabled = false;
+                        this.toggleBtnText.textContent = 'Start Server';
+                        this.updateStatus('stopped', 'Server Stopped');
+                    }
+                }
+            }
+
+            async stopServer() {
+                if (window.electronAPI) {
+                    try {
+                        this.toggleBtn.disabled = true;
+                        this.toggleBtnText.textContent = 'Stopping...';
+                        this.addLogEntry({ message: 'Stopping server...', level: 'info' });
+                        
+                        const result = await window.electronAPI.stopServer();
+                        if (result.success) {
+                            this.addLogEntry({ message: 'Server stopped', level: 'info' });
+                        } else {
+                            this.addLogEntry({ message: `Failed to stop server: ${result.error}`, level: 'error' });
+                        }
+                    } catch (error) {
+                        this.addLogEntry({ message: `Error stopping server: ${error.message}`, level: 'error' });
+                    } finally {
+                        this.toggleBtn.disabled = false;
+                    }
+                }
+            }
+
+            async openWebInterface() {
+                if (window.electronAPI) {
+                    try {
+                        await window.electronAPI.openWebInterface();
+                    } catch (error) {
+                        this.addLogEntry({ message: `Error opening web interface: ${error.message}`, level: 'error' });
+                    }
+                }
+            }
+
+            async updateServerStatus() {
+                if (window.electronAPI) {
+                    try {
+                        const status = await window.electronAPI.getServerStatus();
+                        this.handleServerStatusUpdate(status);
+                    } catch (error) {
+                        console.error('Failed to get server status:', error);
+                    }
+                }
+            }
+
+            handleServerStatusUpdate(status) {
+                this.serverRunning = status.running;
+                
+                if (status.running) {
+                    this.updateStatus('running', 'Server Running');
+                    this.toggleBtnText.textContent = 'Stop Server';
+                    this.webInterfaceSection.classList.remove('hidden');
+                } else {
+                    this.updateStatus('stopped', 'Server Stopped');
+                    this.toggleBtnText.textContent = 'Start Server';
+                    this.webInterfaceSection.classList.add('hidden');
+                }
+
+                this.toggleBtn.disabled = false;
+                this.updateServerUrl();
+            }
+
+            updateStatus(status, text) {
+                this.statusIndicator.className = `status-indicator status-${status}`;
+                this.statusText.textContent = text;
+                
+                if (status !== 'stopped') {
+                    this.logsSection.classList.remove('hidden');
+                }
+            }
+
+            updateServerUrl() {
+                if (this.serverRunning && this.localIP !== 'Loading...') {
+                    this.serverUrl.textContent = `${this.localIP}:${this.currentPort}`;
+                } else {
+                    this.serverUrl.textContent = '';
+                }
+            }
+
+            async getLocalIP() {
+                try {
+                    if (window.electronAPI) {
+                        this.localIP = await window.electronAPI.getLocalIP();
+                    } else {
+                        this.localIP = '127.0.0.1';
+                    }
+                    
+                    this.localIpDisplay.textContent = this.localIP;
+                    this.updateServerUrl();
+                } catch (error) {
+                    console.error('Failed to get local IP:', error);
+                    this.localIP = '127.0.0.1';
+                    this.localIpDisplay.textContent = this.localIP;
+                    this.updateServerUrl();
+                }
+            }
+
+            async refreshLocalIP() {
+                this.refreshIpBtn.disabled = true;
+                this.refreshIpBtn.textContent = '↻ Refreshing...';
+                this.localIpDisplay.textContent = 'Refreshing...';
+                
+                try {
+                    if (window.electronAPI) {
+                        this.localIP = await window.electronAPI.refreshLocalIP();
+                        this.localIpDisplay.textContent = this.localIP;
+                        this.updateServerUrl();
+                        this.addLogEntry({ message: `IP address refreshed: ${this.localIP}`, level: 'info' });
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh local IP:', error);
+                    this.addLogEntry({ message: 'Failed to refresh IP address', level: 'error' });
+                    this.localIpDisplay.textContent = this.localIP;
+                } finally {
+                    this.refreshIpBtn.disabled = false;
+                    this.refreshIpBtn.textContent = '↻ Refresh';
+                }
+            }
+
+            addLogEntry(logData) {
+                const entry = document.createElement('div');
+                entry.className = `text-${logData.level === 'error' ? 'red' : 'slate'}-${logData.level === 'error' ? '400' : '300'} mb-1`;
+                entry.textContent = `${new Date().toLocaleTimeString()}: ${logData.message}`;
+                
+                this.statusLog.appendChild(entry);
+                this.statusLog.scrollTop = this.statusLog.scrollHeight;
+                
+                // Keep only last 20 log entries
+                while (this.statusLog.children.length > 20) {
+                    this.statusLog.removeChild(this.statusLog.firstChild);
+                }
+
+                this.logsSection.classList.remove('hidden');
+            }
+        }
+
+        // Initialize the launcher when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new QOnCommandLauncher();
+        });
+    </script>
+</body>
+</html>

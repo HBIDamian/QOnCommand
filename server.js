@@ -67,24 +67,31 @@ const io = socketIo(server, {
 
 // Handle new client connections and send server info
 io.on('connection', (socket) => {
-    logger.info(`Socket client connected: ${socket.id}`);
-    socket.emit('serverInfo', {
-        nodeVersion: process.version,
-        port: WEB_PORT,
-        ip: getLocalIpAddress()
-    });
+    logger.info(`✅ Socket client connected: ${socket.id}`);
     
-    // Initialize client connection state
-    clientConnections.set(socket.id, {
-        instance: null,
-        client: null,
-        selectedCue: { number: "", name: "" },
-        nextCue: { number: "", name: "" }
-    });
+    try {
+        socket.emit('serverInfo', {
+            nodeVersion: process.version,
+            port: WEB_PORT,
+            ip: getLocalIpAddress()
+        });
+        
+        // Initialize client connection state
+        clientConnections.set(socket.id, {
+            instance: null,
+            client: null,
+            selectedCue: { number: "", name: "" },
+            nextCue: { number: "", name: "" }
+        });
+        
+        logger.info(`📡 Client ${socket.id} initialized successfully`);
+    } catch (error) {
+        logger.error(`❌ Error initializing client ${socket.id}: ${error.message}`);
+    }
     
     // Clean up when client disconnects
     socket.on('disconnect', () => {
-        logger.info(`Socket client disconnected: ${socket.id}`);
+        logger.info(`🔌 Socket client disconnected: ${socket.id}`);
         const clientData = clientConnections.get(socket.id);
         if (clientData && clientData.workspaceId) {
             // Don't immediately clean up workspace connection - keep it alive for reconnects
@@ -92,7 +99,7 @@ io.on('connection', (socket) => {
                 // Only remove if client hasn't reconnected in 30 seconds
                 const stillExists = clientConnections.has(socket.id);
                 if (!stillExists) {
-                    logger.info(`Cleaning up abandoned client ${socket.id} from workspace ${clientData.workspaceId}`);
+                    logger.info(`🧹 Cleaning up abandoned client ${socket.id} from workspace ${clientData.workspaceId}`);
                     removeClientFromWorkspace(socket.id, clientData.workspaceId);
                 }
             }, 30000); // 30 second grace period
@@ -101,7 +108,7 @@ io.on('connection', (socket) => {
         setTimeout(() => {
             const stillExists = clientConnections.has(socket.id);
             if (stillExists) {
-                logger.info(`Removing stale client connection: ${socket.id}`);
+                logger.info(`🗑️ Removing stale client connection: ${socket.id}`);
                 clientConnections.delete(socket.id);
             }
         }, 30000);
@@ -1250,59 +1257,95 @@ function getLocalIpAddress() {
 
 // Separate instances from workspaces following qController pattern  
 async function discoverQLabInstances() {
-    logger.info('Starting QLab instance discovery...');
+    logger.info('🔍 Starting QLab instance discovery...');
     
     return new Promise((resolve) => {
         try {
-            const bonjourService = safeRequire('bonjour-service');
+            // Try to require bonjour-service safely
+            let bonjourService;
+            try {
+                bonjourService = safeRequire('bonjour-service');
+            } catch (error) {
+                logger.warn(`Bonjour service not available: ${error.message}`);
+                // Fallback to localhost immediately
+                discoveredInstances = [{
+                    name: "QLab (localhost)",
+                    ip: "127.0.0.1", 
+                    port: 53000,
+                    hostname: "localhost"
+                }];
+                logger.info(`📍 Using localhost fallback instance`);
+                resolve({ instances: discoveredInstances, error: null });
+                return;
+            }
+            
             const bonjourInstance = new bonjourService.default();
             let foundInstances = [];
+            let discoveryCompleted = false;
             
-            logger.info('Searching for QLab services via Bonjour/Zeroconf...');
+            logger.info('🔍 Searching for QLab services via Bonjour/Zeroconf...');
+            
+            // Set a timeout to ensure we don't hang indefinitely
+            const discoveryTimeout = setTimeout(() => {
+                if (!discoveryCompleted) {
+                    discoveryCompleted = true;
+                    try {
+                        if (browser) browser.stop();
+                        bonjourInstance.destroy();
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                    
+                    if (foundInstances.length > 0) {
+                        discoveredInstances = foundInstances;
+                        logger.info(`✅ Found ${discoveredInstances.length} QLab instance(s) via Bonjour`);
+                        resolve({ instances: discoveredInstances, error: null });
+                    } else {
+                        // Try fallback to localhost
+                        logger.warn("⚠️ No QLab instances found via Bonjour, using localhost fallback");
+                        discoveredInstances = [{
+                            name: "QLab (localhost)",
+                            ip: "127.0.0.1", 
+                            port: 53000,
+                            hostname: "localhost"
+                        }];
+                        logger.info(`📍 Using localhost fallback instance`);
+                        resolve({ instances: discoveredInstances, error: null });
+                    }
+                }
+            }, 3000); // Reduced timeout to 3 seconds
             
             // Browse for QLab services
             const browser = bonjourInstance.find({ type: 'qlab', protocol: 'tcp' });
             
             browser.on('up', (service) => {
-                logger.info(`Found QLab instance: ${service.name} at ${service.referer.address}:${service.port}`);
-                
-                foundInstances.push({
-                    name: service.name,
-                    ip: service.referer.address,
-                    port: service.port,
-                    hostname: service.name
-                });
+                if (!discoveryCompleted) {
+                    logger.info(`✅ Found QLab instance: ${service.name} at ${service.referer.address}:${service.port}`);
+                    
+                    foundInstances.push({
+                        name: service.name,
+                        ip: service.referer.address,
+                        port: service.port,
+                        hostname: service.name
+                    });
+                }
             });
 
             browser.on('error', (err) => {
-                logger.error(`Bonjour browser error: ${err.message}`);
+                logger.warn(`⚠️ Bonjour browser error: ${err.message}`);
             });
-
-            // Wait for discovery to complete
-            setTimeout(() => {
-                browser.stop();
-                
-                if (foundInstances.length > 0) {
-                    discoveredInstances = foundInstances;
-                    logger.info(`Found ${discoveredInstances.length} QLab instance(s) via Bonjour`);
-                    resolve({ instances: discoveredInstances, error: null });
-                } else {
-                    // Try fallback to localhost
-                    logger.warn("No QLab instances found via Bonjour, trying localhost fallback");
-                    discoveredInstances = [{
-                        name: "QLab (localhost)",
-                        ip: "127.0.0.1", 
-                        port: 53000,
-                        hostname: "localhost"
-                    }];
-                    resolve({ instances: discoveredInstances, error: null });
-                }
-            }, 2000); // Give Bonjour 2 seconds to find services
             
         } catch (error) {
-            logger.error(`Failed to discover QLab instances: ${error.message}`);
-            discoveredInstances = [];
-            resolve({ instances: [], error: `Discovery error: ${error.message}` });
+            logger.warn(`⚠️ Discovery setup failed: ${error.message}`);
+            // Immediate fallback
+            discoveredInstances = [{
+                name: "QLab (localhost)",
+                ip: "127.0.0.1", 
+                port: 53000,
+                hostname: "localhost"
+            }];
+            logger.info(`📍 Using localhost fallback due to discovery error`);
+            resolve({ instances: discoveredInstances, error: null });
         }
     });
 }
@@ -2118,48 +2161,69 @@ async function updateAllClientsCueInfo() {
 
 // Start server
 function startServer() {
-    // Reset performance metrics on server start
-    commandsSent = 0;
-    errorCount = 0;
-    totalLatencyMs = 0.0;
-    globalBackoffUntil = 0;
-    logger.info("Performance metrics cleared on server start");
-    
-    // Broadcast cleared performance metrics to all clients after a short delay
-    setTimeout(() => {
-        io.emit('performance', {
-            average_latency: 0.0,
-            commands_sent: 0,
-            error_rate: 0.0
-        });
-        logger.info("Broadcasted cleared performance metrics to clients");
-    }, 1000);
-    
-    logger.info("Starting QOnCommand - QLab Remote control application");
-    logger.info(`Web interface will be available at http://localhost:${WEB_PORT}`);
-    
-    // Get the local IP address to show a more useful URL
     try {
-        const localIp = getLocalIpAddress();
-        logger.info(`Local network access: http://${localIp}:${WEB_PORT}`);
+        // Reset performance metrics on server start
+        commandsSent = 0;
+        errorCount = 0;
+        totalLatencyMs = 0.0;
+        logger.info("Performance metrics cleared on server start");
+        
+        logger.info("Starting QOnCommand - QLab Remote control application");
+        logger.info(`Web interface will be available at http://localhost:${WEB_PORT}`);
+        
+        // Get the local IP address to show a more useful URL
+        try {
+            const localIp = getLocalIpAddress();
+            logger.info(`Local network access: http://${localIp}:${WEB_PORT}`);
+        } catch (error) {
+            logger.warn(`Could not determine local IP: ${error.message}`);
+        }
+        
+        // Start the HTTP server first (non-blocking)
+        server.listen(WEB_PORT, '0.0.0.0', () => {
+            logger.info(`✅ Server listening on port ${WEB_PORT}`);
+            logger.info(`🌐 Open your browser and navigate to http://localhost:${WEB_PORT}`);
+            
+            // Start QLab discovery in background after server is running
+            setTimeout(() => {
+                try {
+                    logger.info("🔍 Starting QLab instance discovery...");
+                    discoverQLabInstances().catch(error => {
+                        logger.warn(`QLab discovery failed (non-critical): ${error.message}`);
+                    });
+                } catch (error) {
+                    logger.warn(`QLab discovery error (non-critical): ${error.message}`);
+                }
+            }, 100);
+            
+            // Broadcast cleared performance metrics to all clients after server is ready
+            setTimeout(() => {
+                io.emit('performance', {
+                    average_latency: 0.0,
+                    commands_sent: 0,
+                    error_rate: 0.0
+                });
+                logger.info("📊 Broadcasted cleared performance metrics to clients");
+            }, 1000);
+        });
+
+        // Handle server errors
+        server.on('error', (error) => {
+            if (error.code === 'EADDRINUSE') {
+                logger.error(`❌ Port ${WEB_PORT} is already in use. Please stop other processes using this port or change the port.`);
+                process.exit(1);
+            } else {
+                logger.error(`❌ Server error: ${error.message}`);
+                throw error;
+            }
+        });
+        
+        logger.info("Event-driven cue updates enabled - no periodic polling to prevent OSC timeouts");
+        
     } catch (error) {
-        logger.warn(`Could not determine local IP: ${error.message}`);
+        logger.error(`❌ Failed to start server: ${error.message}`);
+        throw error;
     }
-    
-    // Start with an AppleScript-based discovery
-    discoverQLabInstances();
-    // Static middleware already configured above
-
-    // Only update cue info on demand (when QLab sends updates) to prevent OSC timeouts
-    // The periodic update approach was causing OSC timeout cascades
-    logger.info("Event-driven cue updates enabled - no periodic polling to prevent OSC timeouts");
-    
-    // Initial cue info fetch only when clients first connect (handled in socket connection)
-
-    server.listen(WEB_PORT, '0.0.0.0', () => {
-        logger.info(`Server listening on port ${WEB_PORT}`);
-        logger.info(`Open your browser and navigate to http://localhost:${WEB_PORT}`);
-    });
 }
 
 // Handle graceful shutdown
@@ -2219,7 +2283,12 @@ function gracefulShutdown() {
 
 // Start the application only if this file is run directly
 if (require.main === module) {
-    startServer();
+    try {
+        startServer();
+    } catch (error) {
+        logger.error(`Failed to start server: ${error.message}`);
+        process.exit(1);
+    }
 }
 
 module.exports = { 

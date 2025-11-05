@@ -12,7 +12,8 @@ let serverSettings = {
     port: 7522,
     logLevel: 'info',
     logToFile: false,
-    autoStart: false
+    autoStart: false,
+    openBrowserOnStart: false
 };
 
 // Settings file path
@@ -29,10 +30,12 @@ const APP_INFO = {
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
-        minWidth: 800,
+        width: 500,
+        height: 700,
+        minWidth: 400,
         minHeight: 600,
+        maxWidth: 600,
+        resizable: true,
         icon: path.join(__dirname, 'assets', 'icon.png'),
         webPreferences: {
             nodeIntegration: false,
@@ -40,7 +43,10 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         },
         titleBarStyle: 'default',
-        show: false
+        show: false,
+        center: true,
+        backgroundColor: '#0f172a', // Set dark background to prevent white flash
+        vibrancy: null // Disable vibrancy on macOS to prevent flashing
     });
 
     mainWindow.loadFile(path.join(__dirname, 'launcher', 'index.html'));
@@ -61,12 +67,13 @@ app.whenReady().then(async () => {
     await loadSettings();
     createWindow();
 
-    // Auto-start server if enabled
-    if (serverSettings.autoStart) {
-        setTimeout(() => {
-            startServer();
-        }, 1000);
-    }
+    // Auto-start server by default for better UX
+    setTimeout(() => {
+        const result = startServer();
+        if (result && !result.success) {
+            console.error('Failed to auto-start server:', result.error);
+        }
+    }, 1000);
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -155,12 +162,18 @@ function startServer() {
             LOG_TO_FILE: serverSettings.logToFile.toString()
         };
 
-        console.log('Starting server with path:', serverPath);
-        console.log('Working directory:', workingDir);
-        console.log('Server exists:', require('fs').existsSync(serverPath));
+        // Find the actual Node.js executable (not Electron)
+        let nodeExecutable;
+        if (app.isPackaged) {
+            // In packaged app, use the system Node.js
+            nodeExecutable = 'node';
+        } else {
+            // In development, use system Node.js
+            nodeExecutable = 'node';
+        }
 
-        // Use process.execPath instead of 'node' to ensure we use the bundled Node.js
-        serverProcess = spawn(process.execPath, [serverPath], {
+        // Use actual Node.js executable, not Electron
+        serverProcess = spawn(nodeExecutable, [serverPath], {
             env,
             cwd: workingDir,
             stdio: ['pipe', 'pipe', 'pipe']
@@ -198,6 +211,14 @@ function startServer() {
             message: `Server starting on port ${serverSettings.port}`, 
             level: 'info' 
         });
+
+        // Open browser if setting is enabled
+        if (serverSettings.openBrowserOnStart) {
+            setTimeout(() => {
+                const url = `http://localhost:${serverSettings.port}`;
+                shell.openExternal(url);
+            }, 2000); // Wait 2 seconds for server to fully start
+        }
 
         return { success: true };
     } catch (error) {
@@ -325,6 +346,15 @@ function startServerInProcess() {
             message: `Server started in-process on port ${serverSettings.port}`, 
             level: 'info' 
         });
+
+        // Open browser if setting is enabled
+        if (serverSettings.openBrowserOnStart) {
+            setTimeout(() => {
+                const url = `http://localhost:${serverSettings.port}`;
+                shell.openExternal(url);
+            }, 2000); // Wait 2 seconds for server to fully start
+        }
+
         return { success: true };
     } catch (error) {
         console.error('Error starting server in-process:', error);
@@ -413,7 +443,8 @@ ipcMain.handle('reset-settings', async () => {
         port: 7522,
         logLevel: 'info',
         logToFile: false,
-        autoStart: false
+        autoStart: false,
+        openBrowserOnStart: false
     };
     return await saveSettings(defaultSettings);
 });
@@ -505,4 +536,18 @@ ipcMain.handle('check-dependencies', async () => {
         available: availableDependencies,
         isReady: missingDependencies.length === 0
     };
+});
+
+ipcMain.handle('get-local-ip', () => {
+    const interfaces = os.networkInterfaces();
+    
+    for (const name of Object.keys(interfaces)) {
+        for (const interface of interfaces[name]) {
+            if (interface.family === 'IPv4' && !interface.internal) {
+                return interface.address;
+            }
+        }
+    }
+    
+    return '127.0.0.1'; // Fallback to localhost
 });

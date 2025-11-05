@@ -4,11 +4,21 @@
   "description": "QOnCommand - A  web-based remote control for QLab using Node.js",
   "main": "main.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "server": "node server.js",
+    "server:dev": "nodemon server.js",
+    "server:browser": "node server.js & sleep 2 && open http://localhost:7522",
     "test-osc": "node test-osc.js",
-    "install-deps": "npm install",
-    "start:browser": "node server.js & sleep 2 && open http://localhost:7522"
+    "build": "electron-builder --publish=never",
+    "build:mac": "electron-builder --mac --publish=never",
+    "build:win": "electron-builder --win --publish=never", 
+    "build:linux": "electron-builder --linux --publish=never",
+    "build:all": "electron-builder --mac --win --linux --publish=never",
+    "pack": "electron-builder --dir",
+    "clean": "rm -rf dist/",
+    "rebuild": "npm run clean && npm run build",
+    "install-deps": "npm install"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
@@ -20,6 +30,8 @@
     "winston": "^3.10.0"
   },
   "devDependencies": {
+    "electron": "^36.4.0",
+    "electron-builder": "^26.0.12",
     "nodemon": "^3.0.1"
   },
   "keywords": [
@@ -39,5 +51,71 @@
   "license": "MIT",
   "engines": {
     "node": ">=16.0.0"
+  },
+  "build": {
+    "appId": "com.qoncommand.app",
+    "productName": "QOnCommand",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "assets/icon.icns",
+      "target": [
+        {
+          "target": "default",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "singleArchFiles": "*"
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Audio"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}.${ext}"
+    }
   }
 }
