@@ -4,378 +4,238 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
     <title>QOnCommand</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="assets/js/socket.io.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        'sans': ['Inter', 'system-ui', 'sans-serif'],
-                    },
-                    animation: {
-                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        'fade-in': 'fadeIn 0.5s ease-in-out',
-                        'slide-up': 'slideUp 0.3s ease-out',
-                        'bounce-subtle': 'bounceSubtle 0.6s ease-out',
-                        'glow': 'glow 2s ease-in-out infinite alternate',
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0', transform: 'translateY(10px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' },
-                        },
-                        slideUp: {
-                            '0%': { transform: 'translateY(20px)', opacity: '0' },
-                            '100%': { transform: 'translateY(0)', opacity: '1' },
-                        },
-                        bounceSubtle: {
-                            '0%, 20%, 50%, 80%, 100%': { transform: 'translateY(0)' },
-                            '40%': { transform: 'translateY(-4px)' },
-                            '60%': { transform: 'translateY(-2px)' },
-                        },
-                        glow: {
-                            '0%': { boxShadow: '0 0 5px rgba(59, 130, 246, 0.5)' },
-                            '100%': { boxShadow: '0 0 20px rgba(59, 130, 246, 0.8)' },
-                        }
-                    },
-                    backdropBlur: {
-                        xs: '2px',
-                    }
-                }
-            }
-        }
-    </script>
-
-    <style>
-        body {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-            background-attachment: fixed;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        
-        /* Fix mobile background scrolling issues */
-        @supports (-webkit-touch-callout: none) {
-            body {
-                background-attachment: scroll;
-                min-height: 100vh;
-                min-height: -webkit-fill-available;
-            }
-        }
-
-
-        
-        .glass-effect {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-        }
-        
-        .glass-effect:hover {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(255, 255, 255, 0.12);
-        }
-        
-        /* Prevent mobile footer inversion and scrolling issues */
-        @media screen and (max-width: 768px) {
-            html {
-                height: -webkit-fill-available;
-            }
-            
-            body {
-                min-height: 100vh;
-                min-height: -webkit-fill-available;
-                position: relative;
-                overflow-x: hidden;
-            }
-            
-            /* Fix iOS Safari viewport jumping */
-            .main-container {
-                min-height: 100vh;
-                min-height: -webkit-fill-available;
-                padding-bottom: env(safe-area-inset-bottom);
-            }
-            
-            /* Prevent background inversion during scroll */
-            body::before {
-                content: '';
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 120%;
-                background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-                z-index: -1;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/css/fonts.css">
+    <link rel="stylesheet" href="assets/css/app.css">
 </head>
-<body class="min-h-screen text-white" style="min-height: 100vh; min-height: -webkit-fill-available;">
-    <!-- Main Container -->
-    <div class="main-container min-h-screen p-4 sm:p-6 lg:p-8" style="min-height: 100vh; min-height: -webkit-fill-available;">
-        <div class="max-w-7xl mx-auto">
-            
-            <!-- Header -->
-            <header class="text-center mb-8 sm:mb-12 animate-fade-in">
-                <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-3">
-                    QOnCommand
-                </h1>
-                <p class="text-slate-400 text-sm sm:text-base lg:text-lg font-light">
-                    A web-based remote control for Figure53's QLab
-                </p>
+<body class="d-flex flex-column min-vh-100">
+    <div class="main-container flex-grow-1 py-3 px-3 py-md-4 px-md-4" style="margin-bottom: 2rem;">
+        <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+            <header class="text-center mb-5 fade-in">
+                <h1 class="display-5 fw-bold text-gradient mb-3">QOnCommand</h1>
+                <p class="lead fs-6 text-soft">A web-based remote control for Figure53's QLab</p>
             </header>
 
-            <!-- Workspace Selection Modal -->
-            <div id="workspace-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
-                <div class="glass-effect rounded-2xl p-6 sm:p-8 max-w-lg w-full animate-slide-up">
-                    
-                    <!-- Step 1: Select QLab Instance -->
+            <div id="workspace-modal" class="app-modal hidden">
+                <div class="app-modal__dialog glass-card p-4 p-md-5 slide-up">
                     <div id="instance-step" class="step-content">
-                        <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                            Select QLab Instance
-                        </h2>
-                        <div id="instance-list" class="space-y-3 mb-6 max-h-64 overflow-y-auto overflow-x-hidden p-1">
-                            <!-- QLab instances will be populated here -->
-                        </div>
-                        <div class="flex gap-3">
-                            <button id="refresh-instances-btn" class="flex-1 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 hover:border-slate-500/50 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105">
-                                <span class="mr-2">🔄</span>Refresh
+                        <h2 class="h4 text-center text-gradient-sm mb-4">Select QLab Instance</h2>
+                        <div id="instance-list" class="list-stack mb-4"></div>
+                        <div class="d-grid gap-3 d-md-flex">
+                            <button id="refresh-instances-btn" class="btn btn-outline-glass btn-modern flex-grow-1">
+                                <span class="me-2">🔄</span>Refresh
                             </button>
-                            <button id="next-step-btn" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:transform hover:scale-105" disabled>
+                            <button id="next-step-btn" class="btn btn-gradient-primary btn-modern flex-grow-1" disabled>
                                 Next →
                             </button>
                         </div>
                     </div>
 
-                    <!-- Step 2: Select Workspace -->
                     <div id="workspace-step" class="step-content hidden">
-                        <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                            Select Workspace
-                        </h2>
-                        <div class="mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-600/30">
-                            <div class="text-sm text-slate-300">Instance:</div>
-                            <div id="selected-instance-name" class="text-white font-medium">None</div>
+                        <h2 class="h4 text-center text-gradient-sm mb-4">Select Workspace</h2>
+                        <div class="glass-card bg-dark-soft border-0 rounded-4 p-3 mb-4">
+                            <div class="text-soft small">Instance:</div>
+                            <div id="selected-instance-name" class="fw-semibold">None</div>
                         </div>
-                        <div id="workspace-list" class="space-y-3 mb-6 max-h-64 overflow-y-auto overflow-x-hidden p-1">
-                            <!-- Workspaces will be populated here -->
-                        </div>
-                        <div class="flex gap-3">
-                            <button id="back-step-btn" class="flex-1 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 hover:border-slate-500/50 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105">
-                                ← Back
-                            </button>
-                            <button id="connect-workspace-btn" class="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:transform hover:scale-105" disabled>
-                                Connect
-                            </button>
+                        <div id="workspace-list" class="list-stack mb-4"></div>
+                        <div class="d-grid gap-3 d-md-flex">
+                            <button id="back-step-btn" class="btn btn-outline-glass btn-modern flex-grow-1">← Back</button>
+                            <button id="connect-workspace-btn" class="btn btn-gradient-success btn-modern flex-grow-1" disabled>Connect</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Main Grid Layout -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                
-                <!-- Left Column -->
-                <div class="lg:col-span-2 space-y-6">
-                    
-                    <!-- Status Card -->
-                    <div class="glass-effect rounded-2xl p-6 sm:p-8 animate-fade-in">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-                            <h2 class="text-xl sm:text-2xl font-semibold text-white mb-4 sm:mb-0">Connection Status</h2>
-                            <div class="flex items-center space-x-3">
-                                <div id="status-indicator" class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
-                                <span id="status-text" class="text-sm font-medium text-slate-300">Disconnected</span>
-                            </div>
-                        </div>
-                        
-                        <div class="bg-slate-800/30 rounded-xl p-4 sm:p-6 border border-slate-700/30">
-                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-                                <div class="mb-4 sm:mb-0">
-                                    <h3 class="text-lg font-medium text-white mb-1">Workspace</h3>
-                                    <p id="workspace-name" class="text-slate-400 text-sm">No workspace connected</p>
-                                </div>
-                                <div class="flex flex-col sm:flex-row gap-3">
-                                    <button id="change-workspace-btn" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50">
-                                        Change Workspace
-                                    </button>
-                                    <button id="disconnect-btn" class="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500/50 hidden">
-                                        Disconnect
-                                    </button>
+            <div class="row g-4 g-xl-5">
+                <div class="col-lg-8">
+                    <div class="vstack gap-4">
+                        <section class="glass-card p-4 p-md-5">
+                            <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 mb-4">
+                                <h2 class="h4 fw-semibold mb-0 text-center">Connection Status</h2>
+                                <div class="d-flex align-items-center gap-3">
+                                    <span id="status-indicator" class="status-dot status-dot-pulse bg-danger"></span>
+                                    <span id="status-text" class="fw-medium text-soft">Disconnected</span>
                                 </div>
                             </div>
-                            
-                            <div id="connection-status" class="bg-gradient-to-r from-red-600 to-rose-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm">
-                                Click "Change Workspace" to connect to QLab
+                            <div class="glass-card bg-dark-soft border-0 shadow-none p-4 p-xl-5">
+                                <div class="d-flex flex-column flex-xl-row justify-content-between align-items-start align-items-xl-center gap-4 mb-4">
+                                    <div>
+                                        <h3 class="h5 mb-1">Workspace</h3>
+                                        <div id="workspace-name" class="text-soft small">No workspace connected</div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button id="change-workspace-btn" class="btn btn-gradient-primary btn-modern">Change Workspace</button>
+                                        <button id="disconnect-btn" class="btn btn-gradient-danger btn-modern" style="display:none;">Disconnect</button>
+                                    </div>
+                                </div>
+                                <div id="connection-status" class="connection-status alert alert-danger text-center">
+                                    Click "Change Workspace" to connect to QLab
+                                </div>
                             </div>
-                        </div>
-                    </div>
+                        </section>
 
-                    <!-- Cue Information -->
-                    <div class="glass-effect rounded-2xl p-6 sm:p-8 animate-fade-in">
-                        <div class="flex items-center justify-between mb-6">
-                            <h2 class="text-xl sm:text-2xl font-semibold text-white">Cue Information</h2>
-                            <button id="refresh-cue-btn" class="bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 hover:border-slate-500/50 p-2 rounded-lg transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-slate-500/50" title="Refresh">
-                                <span class="text-slate-300 hover:text-white">♻</span>
-                            </button>
-                        </div>
-                        
-                        <!-- Current Cue -->
-                        <div class="bg-gradient-to-r from-blue-600/10 to-indigo-600/10 border border-blue-500/20 rounded-xl p-4 mb-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-blue-400 text-xs font-semibold uppercase tracking-wider">Current Selected</span>
-                                <span id="current-cue-type" class="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-md">Loading...</span>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <div id="current-cue-number" class="text-2xl font-bold text-white">--</div>
-                                <div id="current-cue-name" class="text-sm text-slate-300 flex-1">Loading...</div>
-                            </div>
-                        </div>
-                        
-                        <!-- Next Cue -->
-                        <div class="bg-gradient-to-r from-orange-600/10 to-amber-600/10 border border-orange-500/20 rounded-xl p-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-orange-400 text-xs font-semibold uppercase tracking-wider">Next Cue</span>
-                                <span id="next-cue-type" class="text-xs bg-orange-500/20 text-orange-300 px-2 py-1 rounded-md">Loading...</span>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <div id="next-cue-number" class="text-2xl font-bold text-white">--</div>
-                                <div id="next-cue-name" class="text-sm text-slate-300 flex-1">Loading...</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Transport Controls -->
-                    <!-- Icons from: https://www.svgrepo.com/collection/solar-bold-icons/23 -->
-                    <div class="glass-effect rounded-2xl p-6 sm:p-8 animate-fade-in">
-                        <h2 class="text-xl sm:text-2xl font-semibold text-white mb-6">Transport Controls</h2>
-                        
-                        <div class="flex justify-center items-center gap-3 sm:gap-6">
-                            <!-- Previous -->
-                            <button id="prev-btn" class="group w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 rounded-xl sm:rounded-2xl border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50" title="Previous">
-                                <svg class="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 group-hover:text-white transition-colors duration-200" viewBox="0 0 24 24" fill="none">
-                                    <path d="M8.09015 14.6474C6.30328 13.4935 6.30328 10.5065 8.09015 9.35258L18.8792 2.38548C20.6158 1.26402 22.75 2.72368 22.75 5.0329V18.9671C22.75 21.2763 20.6158 22.736 18.8792 21.6145L8.09015 14.6474Z" fill="currentColor"/>
-                                    <path d="M2 5C2 4.58579 2.33579 4.25 2.75 4.25C3.16421 4.25 3.5 4.58579 3.5 5V19C3.5 19.4142 3.16421 19.75 2.75 19.75C2.33579 19.75 2 19.4142 2 19V5Z" fill="currentColor"/>
-                                </svg>
-                            </button>
-                            
-                            <!-- Stop -->
-                            <button id="stop-btn" class="group w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 rounded-xl sm:rounded-2xl border border-red-500/50 hover:border-red-400/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500/50" title="Stop">
-                                <svg class="w-8 h-8 sm:w-10 sm:h-10 text-white transition-transform duration-200 group-hover:scale-110" viewBox="0 0 24 24" fill="none">
-                                  <path d="M2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C22 4.92893 22 7.28595 22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12Z" fill="currentColor"/>
-                                </svg>
-                            </button>
-                            
-                            <!-- Play -->
-                            <button id="play-btn" class="group w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl sm:rounded-2xl border border-green-500/50 hover:border-green-400/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500/50" title="Play">
-                            <svg class="w-10 h-10 sm:w-12 sm:h-12 text-white transition-transform duration-200 group-hover:scale-110 ml-0.5" viewBox="0 0 24 24" fill="none">
-                              <path d="M21.4086 9.35258C23.5305 10.5065 23.5305 13.4935 21.4086 14.6474L8.59662 21.6145C6.53435 22.736 4 21.2763 4 18.9671L4 5.0329C4 2.72368 6.53435 1.26402 8.59661 2.38548L21.4086 9.35258Z" fill="currentColor"/>
-                            </svg>
-                            </button>
-                            
-                            <!-- Panic -->
-                            <button id="panic-btn" class="group w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 rounded-xl sm:rounded-2xl border border-orange-500/50 hover:border-orange-400/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500/50" title="Panic">
-                                <svg class="w-8 h-8 sm:w-10 sm:h-10 text-white transition-transform duration-200 group-hover:scale-110" viewBox="0 0 24 24" fill="none">
-                                    <path d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" fill="currentColor"/>
-                                    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 7.25C12.4142 7.25 12.75 7.58579 12.75 8V11.6893L15.0303 13.9697C15.3232 14.2626 15.3232 14.7374 15.0303 15.0303C14.7374 15.3232 14.2626 15.3232 13.9697 15.0303L11.4697 12.5303C11.329 12.3897 11.25 12.1989 11.25 12V8C11.25 7.58579 11.5858 7.25 12 7.25Z" fill="#1C274C"/>
-                                </svg>
-                            </button>
-                            
-                            <!-- Next -->
-                            <button id="next-btn" class="group w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 rounded-xl sm:rounded-2xl border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50" title="Next">
-                                <svg class="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 group-hover:text-white transition-colors duration-200" viewBox="0 0 24 24" fill="none">
-                                    <path d="M16.6598 14.6474C18.4467 13.4935 18.4467 10.5065 16.6598 9.35258L5.87083 2.38548C4.13419 1.26402 2 2.72368 2 5.0329V18.9671C2 21.2763 4.13419 22.736 5.87083 21.6145L16.6598 14.6474Z" fill="currentColor"/>
-                                    <path d="M22.75 5C22.75 4.58579 22.4142 4.25 22 4.25C21.5858 4.25 21.25 4.58579 21.25 5V19C21.25 19.4142 21.5858 19.75 22 19.75C22.4142 19.75 22.75 19.4142 22.75 19V5Z" fill="currentColor"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Extended Controls -->
-                    <div class="glass-effect rounded-2xl p-6 sm:p-8 animate-fade-in">
-                        <h2 class="text-xl sm:text-2xl font-semibold text-white mb-6">Extended Controls</h2>
-                        
-                        <div class="space-y-4">
-                            <!-- Reset Button -->
-                            <div class="flex justify-center">
-                                <button id="reset-btn" class="bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 border border-slate-600/50 hover:border-slate-500/50 px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-slate-500/50">
-                                    <span class="mr-2">↻</span>Reset Workspace
+                        <section class="glass-card p-4 p-md-5">
+                            <div class="d-flex align-items-center justify-content-between mb-4">
+                                <h2 class="h4 fw-semibold mb-0 text-center">Cue Information</h2>
+                                <button id="refresh-cue-btn" class="btn btn-soft-secondary btn-sm fw-semibold" title="Refresh">
+                                    ↻
                                 </button>
                             </div>
-                            
-                            <!-- Cue Selection -->
-                            <div class="flex flex-col sm:flex-row gap-3 items-center justify-center">
-                                <div class="flex gap-2">
-                                    <select id="cue-select" class="w-48 sm:w-64 bg-slate-800/50 border border-slate-600/50 focus:border-blue-500/50 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-all duration-200 truncate">
-                                        <option value="">Select Cue</option>
-                                    </select>
-                                    <button id="load-cues-btn" class="flex-shrink-0 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50" title="Load Cue List">
-                                        <span class="text-lg">↻</span>
-                                    </button>
+                            <div class="vstack gap-3">
+                                <div class="cue-highlight current">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <span class="text-uppercase text-soft fw-semibold small">Current Selected</span>
+                                        <span id="current-cue-type" class="badge cue-badge">Loading...</span>
+                                    </div>
+                                    <div class="d-flex flex-wrap align-items-baseline gap-3">
+                                        <div id="current-cue-number" class="cue-number">--</div>
+                                        <div id="current-cue-name" class="cue-name flex-grow-1">Loading...</div>
+                                    </div>
                                 </div>
-                                <button id="select-cue-btn" class="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500/50">
-                                    Select Cue
+                                <div class="cue-highlight next">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <span class="text-uppercase text-soft fw-semibold small">Next Cue</span>
+                                        <span id="next-cue-type" class="badge cue-badge cue-badge-next">Loading...</span>
+                                    </div>
+                                    <div class="d-flex flex-wrap align-items-baseline gap-3">
+                                        <div id="next-cue-number" class="cue-number">--</div>
+                                        <div id="next-cue-name" class="cue-name flex-grow-1">Loading...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="glass-card p-4 p-md-5">
+                            <h2 class="h4 fw-semibold mb-4 text-center">Transport Controls</h2>
+                            <div class="d-flex justify-content-center align-items-center flex-wrap transport-stack">
+                                <button id="prev-btn" class="btn-icon btn-outline-glass" title="Previous">
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                        <path d="M8.09015 14.6474C6.30328 13.4935 6.30328 10.5065 8.09015 9.35258L18.8792 2.38548C20.6158 1.26402 22.75 2.72368 22.75 5.0329V18.9671C22.75 21.2763 20.6158 22.736 18.8792 21.6145L8.09015 14.6474Z" fill="currentColor"></path>
+                                        <path d="M2 5C2 4.58579 2.33579 4.25 2.75 4.25C3.16421 4.25 3.5 4.58579 3.5 5V19C3.5 19.4142 3.16421 19.75 2.75 19.75C2.33579 19.75 2 19.4142 2 19V5Z" fill="currentColor"></path>
+                                    </svg>
+                                </button>
+                                <button id="stop-btn" class="btn-icon btn-gradient-danger" title="Stop">
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                        <path d="M2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C22 4.92893 22 7.28595 22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12Z" fill="currentColor"></path>
+                                    </svg>
+                                </button>
+                                <button id="play-btn" class="btn-icon lg btn-gradient-success" title="Play">
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                        <path d="M21.4086 9.35258C23.5305 10.5065 23.5305 13.4935 21.4086 14.6474L8.59662 21.6145C6.53435 22.736 4 21.2763 4 18.9671L4 5.0329C4 2.72368 6.53435 1.26402 8.59661 2.38548L21.4086 9.35258Z" fill="currentColor"></path>
+                                    </svg>
+                                </button>
+                                <button id="panic-btn" class="btn-icon btn-gradient-warning" title="Panic">
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                        <path d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" fill="currentColor"></path>
+                                        <path fill-rule="evenodd" clip-rule="evenodd" d="M12 7.25C12.4142 7.25 12.75 7.58579 12.75 8V11.6893L15.0303 13.9697C15.3232 14.2626 15.3232 14.7374 15.0303 15.0303C14.7374 15.3232 14.2626 15.3232 13.9697 15.0303L11.4697 12.5303C11.329 12.3897 11.25 12.1989 11.25 12V8C11.25 7.58579 11.5858 7.25 12 7.25Z" fill="#1C274C"></path>
+                                    </svg>
+                                </button>
+                                <button id="next-btn" class="btn-icon btn-outline-glass" title="Next">
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                        <path d="M16.6598 14.6474C18.4467 13.4935 18.4467 10.5065 16.6598 9.35258L5.87083 2.38548C4.13419 1.26402 2 2.72368 2 5.0329V18.9671C2 21.2763 4.13419 22.736 5.87083 21.6145L16.6598 14.6474Z" fill="currentColor"></path>
+                                        <path d="M22.75 5C22.75 4.58579 22.4142 4.25 22 4.25C21.5858 4.25 21.25 4.58579 21.25 5V19C21.25 19.4142 21.5858 19.75 22 19.75C22.4142 19.75 22.75 19.4142 22.75 19V5Z" fill="currentColor"></path>
+                                    </svg>
                                 </button>
                             </div>
-                        </div>
+                        </section>
                     </div>
                 </div>
+                <div class="col-lg-4">
+                    <div class="vstack gap-4">
+                        <section class="glass-card p-4 p-md-5">
+                            <h2 class="app-card-title mb-4 text-center">Cue Navigation</h2>
+                            <div class="d-flex justify-content-center mb-4">
+                                <button id="reset-btn" class="btn btn-soft-secondary btn-modern">
+                                    <span class="me-2">↻</span>Reset
+                                </button>
+                            </div>
+                            <div class="vstack gap-3">
+                                <div class="d-flex gap-2">
+                                    <select id="cue-select" class="form-select form-select-glass">
+                                        <option value="">Select Cue</option>
+                                    </select>
+                                    <button id="load-cues-btn" class="btn btn-soft-secondary btn-modern" title="Refresh Cue List">🔄</button>
+                                </div>
+                                <button id="select-cue-btn" class="btn btn-gradient-primary btn-modern w-100">Go to Selected Cue</button>
+                            </div>
+                        </section>
 
-                <!-- Right Column -->
-                <div class="space-y-6">
-                    
-                    <!-- Network Information -->
-                    <div class="glass-effect rounded-2xl p-6 animate-fade-in">
-                        <h2 class="text-lg sm:text-xl font-semibold text-white mb-6">Network</h2>
-                        
-                        <div class="space-y-2">
-                            <div class="flex justify-between items-center">
-                                <span class="text-xs text-slate-400">Private IP:</span>
-                                <span id="private-ip" class="text-xs font-medium text-white">192.168.1.x</span>
+                        <section class="glass-card p-4 p-md-5 volume-section">
+                            <div class="d-flex align-items-center justify-content-between mb-4">
+                                <h2 class="app-card-title mb-0 text-center">Volume Control</h2>
+                                <button id="refresh-volume-btn" class="btn btn-soft-secondary btn-sm" title="Refresh Volume">🔄</button>
                             </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-xs text-slate-400">Port:</span>
-                                <span id="port" class="text-xs font-medium text-white">XXXX</span>
+                            <div id="volume-unavailable" class="text-center py-4 hidden">No audio cue selected</div>
+                            <div id="volume-controls" class="vstack gap-4">
+                                <div class="volume-control-group">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="text-soft text-uppercase small fw-semibold">Master</span>
+                                        <span id="master-level-display" class="badge volume-badge volume-muted">-60dB</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="range" id="master-volume-slider" min="-60" max="12" value="-60" step="0.1" class="form-range volume-slider flex-grow-1" data-channel="master">
+                                        <button class="btn btn-outline-glass btn-sm mute-btn" data-channel="master" title="Mute">🔇</button>
+                                    </div>
+                                </div>
+                                <div class="volume-control-group">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="text-soft text-uppercase small fw-semibold">Channel 1</span>
+                                        <span id="ch1-level-display" class="badge volume-badge volume-muted">-60dB</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="range" id="ch1-volume-slider" min="-60" max="12" value="-60" step="0.1" class="form-range volume-slider flex-grow-1" data-channel="channel1">
+                                        <button class="btn btn-outline-glass btn-sm mute-btn" data-channel="channel1" title="Mute">🔇</button>
+                                    </div>
+                                </div>
+                                <div class="volume-control-group">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="text-soft text-uppercase small fw-semibold">Channel 2</span>
+                                        <span id="ch2-level-display" class="badge volume-badge volume-muted">-60dB</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="range" id="ch2-volume-slider" min="-60" max="12" value="-60" step="0.1" class="form-range volume-slider flex-grow-1" data-channel="channel2">
+                                        <button class="btn btn-outline-glass btn-sm mute-btn" data-channel="channel2" title="Mute">🔇</button>
+                                    </div>
+                                </div>
+                                <div class="border-top border-secondary pt-3 mt-2 text-center small text-soft">
+                                    <span id="volume-cue-info">No cue selected</span>
+                                </div>
                             </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-xs text-slate-400">Node.js:</span>
-                                <span id="nodejs-version" class="text-xs font-medium text-white">v23.0</span>
-                            </div>
-                        </div>
-                    </div>
+                        </section>
 
-                    <!-- Performance -->
-                    <div class="glass-effect rounded-2xl p-6 animate-fade-in">
-                        <h2 class="text-lg sm:text-xl font-semibold text-white mb-6">Performance</h2>
-                        
-                        <div class="space-y-2">
-                            <div class="flex justify-between items-center">
-                                <span class="text-xs text-slate-400">Avg Latency:</span>
-                                <span id="avg-latency" class="text-xs font-medium text-white">259.9ms</span>
+                        <section class="glass-card p-4 p-md-5">
+                            <h2 class="app-card-title mb-4 text-center">Network</h2>
+                            <div class="info-grid">
+                                <div class="info-row"><span>Private IP:</span><span id="private-ip" class="badge-soft">192.168.1.x</span></div>
+                                <div class="info-row"><span>Port:</span><span id="port" class="badge-soft">XXXX</span></div>
+                                <div class="info-row"><span>Node.js:</span><span id="nodejs-version" class="badge-soft">v23.0</span></div>
                             </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-xs text-slate-400">Commands:</span>
-                                <span id="commands-sent" class="text-xs font-medium text-white">546</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-xs text-slate-400">Error Rate:</span>
-                                <span id="error-rate" class="text-xs font-medium text-green-400">0.0%</span>
-                            </div>
-                        </div>
-                    </div>
+                        </section>
 
-                    <!-- System Information -->
-                    <div class="glass-effect rounded-2xl p-6 animate-fade-in">
-                        <div class="text-center">
-                            <p class="text-xs text-slate-500">QOnCommand - A QLab Remote Control</p>
-                            <!-- Disclaimer -->
-                            <p class="text-xs text-slate-500 mt-1">Figure 53® and QLab® are registered trademarks of Figure 53, LLC. This project is not affiliated with with Figure 53, LLC and this application has not been reviewed nor is it approved by Figure 53, LLC.</p>
-                        </div>
+                        <section class="glass-card p-4 p-md-5">
+                            <h2 class="app-card-title mb-4 text-center">Performance</h2>
+                            <div class="info-grid">
+                                <div class="info-row"><span>Avg Latency:</span><span id="avg-latency" class="badge-soft">0.0ms</span></div>
+                                <div class="info-row"><span>Commands:</span><span id="commands-sent" class="badge-soft">0</span></div>
+                                <div class="info-row"><span>Error Rate:</span><span id="error-rate" class="badge-soft">0.0%</span></div>
+                            </div>
+                        </section>
+
+                        <section class="glass-card p-4 p-md-5">
+                            <div class="app-footer text-center">
+                                <p>QOnCommand - A QLab Remote Control</p>
+                                <p>Figure 53® and QLab® are registered trademarks of Figure 53, LLC. This project is not affiliated with Figure 53, LLC and this application has not been reviewed nor is it approved by Figure 53, LLC.</p>
+                            </div>
+                        </section>
+                        <br>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="assets/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/socket.io.min.js"></script>
     <script>
         class QOnCommand {
             constructor() {
@@ -448,6 +308,24 @@
                 this.avgLatency = document.getElementById('avg-latency');
                 this.commandsSent = document.getElementById('commands-sent');
                 this.errorRate = document.getElementById('error-rate');
+                
+                // Volume control elements
+                this.refreshVolumeBtn = document.getElementById('refresh-volume-btn');
+                this.volumeUnavailable = document.getElementById('volume-unavailable');
+                this.volumeControls = document.getElementById('volume-controls');
+                this.masterVolumeSlider = document.getElementById('master-volume-slider');
+                this.ch1VolumeSlider = document.getElementById('ch1-volume-slider');
+                this.ch2VolumeSlider = document.getElementById('ch2-volume-slider');
+                this.masterLevelDisplay = document.getElementById('master-level-display');
+                this.ch1LevelDisplay = document.getElementById('ch1-level-display');
+                this.ch2LevelDisplay = document.getElementById('ch2-level-display');
+                this.volumeCueInfo = document.getElementById('volume-cue-info');
+                this.muteButtons = document.querySelectorAll('.mute-btn');
+                
+                // Volume control state
+                this.volumeLevels = { master: -60, channel1: -60, channel2: -60, available: false };
+                this.mutedChannels = new Set(); // Track which channels are muted
+                this.previousLevels = { master: -60, channel1: -60, channel2: -60 }; // Store levels before muting
                 
                 // Set initial button states
                 this.nextStepBtn.disabled = true;
@@ -539,6 +417,43 @@
                     console.log('Load cues button clicked');
                     this.loadCueList();
                 });
+                
+                // Volume control events
+                this.refreshVolumeBtn.addEventListener('click', () => {
+                    console.log('Refresh volume button clicked');
+                    this.updateVolumeInfo();
+                });
+                
+                // Volume slider events with throttling to prevent flooding QLab
+                let volumeUpdateTimeout = null;
+                const handleVolumeChange = (slider) => {
+                    const channel = slider.dataset.channel;
+                    const level = parseInt(slider.value);
+                    
+                    // Update display immediately for responsiveness
+                    this.updateVolumeDisplay(channel, level);
+                    
+                    // Throttle actual OSC updates to prevent flooding
+                    if (volumeUpdateTimeout) {
+                        clearTimeout(volumeUpdateTimeout);
+                    }
+                    
+                    volumeUpdateTimeout = setTimeout(() => {
+                        this.setVolumeLevel(channel, level);
+                    }, 150); // Wait 150ms after user stops dragging
+                };
+                
+                this.masterVolumeSlider.addEventListener('input', (e) => handleVolumeChange(e.target));
+                this.ch1VolumeSlider.addEventListener('input', (e) => handleVolumeChange(e.target));
+                this.ch2VolumeSlider.addEventListener('input', (e) => handleVolumeChange(e.target));
+                
+                // Mute button events
+                this.muteButtons.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const channel = btn.dataset.channel;
+                        this.toggleMute(channel);
+                    });
+                });
             }
             
             async loadInitialData() {
@@ -575,7 +490,7 @@
                 
                 // Set initial status - not attempting to connect
                 this.connectionStatus.textContent = 'Click "Change Workspace" to connect to QLab';
-                this.connectionStatus.className = 'bg-gradient-to-r from-red-600 to-rose-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm';
+                this.connectionStatus.className = 'connection-status alert alert-danger text-center';
                 
                 // Show change workspace button by default
                 this.changeWorkspaceBtn.style.display = 'block';
@@ -622,7 +537,7 @@
                         
                         // Update connection status
                         this.connectionStatus.textContent = 'QLab is running';
-                        this.connectionStatus.className = 'bg-gradient-to-r from-green-600 to-emerald-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm';
+                        this.connectionStatus.className = 'connection-status alert alert-success text-center';
                         
                         // Update cue info immediately
                         if (data.currentCue && data.nextCue) {
@@ -631,6 +546,9 @@
                             // Fetch fresh cue info
                             await this.updateCueInfo();
                         }
+                        
+                        // Fetch volume info immediately after connection
+                        this.updateVolumeInfo();
                         
                         // Fetch cue list immediately after connection (fallback for real-time updates)
                         this.fetchCueList();
@@ -676,7 +594,7 @@
                         
                         // Update connection status
                         this.connectionStatus.textContent = 'Click "Change Workspace" to connect to QLab';
-                        this.connectionStatus.className = 'bg-gradient-to-r from-red-600 to-rose-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm';
+                        this.connectionStatus.className = 'connection-status alert alert-danger text-center';
                         
                         // Show change workspace button, hide disconnect button
                         this.disconnectBtn.style.display = 'none';
@@ -687,6 +605,9 @@
                             { number: '--', name: 'Not connected', type: 'unknown' },
                             { number: '--', name: 'Not connected', type: 'unknown' }
                         );
+                        
+                        // Reset volume display
+                        this.showVolumeUnavailable('Not connected');
                         
                         // Clear cue list
                         this.cueSelect.innerHTML = '<option value="">Select Cue</option>';
@@ -718,13 +639,13 @@
                 const originalSVG = svg.outerHTML;
                 
                 // Show loading spinner
-                svg.outerHTML = `<div class="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-white">⏳</div>`;
+                svg.outerHTML = '<div class="spinner-border text-light spinner-border-sm" role="status"></div>';
                 button.disabled = true;
                 button.style.opacity = '0.7';
                 
                 // Reset after short delay
                 setTimeout(() => {
-                    const spinner = button.querySelector('div');
+                    const spinner = button.querySelector('.spinner-border');
                     if (spinner) {
                         spinner.outerHTML = originalSVG;
                     }
@@ -815,14 +736,14 @@
                 
                 // Show loading state
                 this.loadCuesBtn.disabled = true;
-                this.loadCuesBtn.innerHTML = '<span class="text-lg">⏳</span>';
+                this.loadCuesBtn.textContent = '⏳';
                 
                 try {
                     await this.fetchCueList();
                 } finally {
                     // Restore button state
                     this.loadCuesBtn.disabled = false;
-                    this.loadCuesBtn.innerHTML = '<span class="text-lg">↻</span>';
+                    this.loadCuesBtn.textContent = '🔄';
                 }
             }
             
@@ -883,47 +804,208 @@
             
             updateCueDisplay(current, next) {
                 // Check if we're disconnected and show appropriate message
+                const applyCueBadge = (element, cueType, variant) => {
+                    const normalized = (cueType || 'unknown').toLowerCase();
+                    element.className = 'badge cue-badge';
+                    if (variant === 'next') {
+                        element.classList.add('cue-badge-next');
+                    }
+                    if (normalized === 'audio') {
+                        element.classList.add('cue-badge-audio');
+                    }
+                    element.textContent = normalized;
+                };
+
                 if (!this.connected) {
                     this.currentCueNumber.textContent = '--';
                     this.currentCueName.textContent = 'Not connected';
-                    this.currentCueType.textContent = 'unknown';
-                    this.currentCueType.className = 'text-xs bg-slate-500/20 text-slate-300 px-2 py-1 rounded-md';
-                    
+                    applyCueBadge(this.currentCueType, 'unknown');
+
                     this.nextCueNumber.textContent = '--';
                     this.nextCueName.textContent = 'Not connected';
-                    this.nextCueType.textContent = 'unknown';
-                    this.nextCueType.className = 'text-xs bg-slate-500/20 text-slate-300 px-2 py-1 rounded-md';
+                    applyCueBadge(this.nextCueType, 'unknown', 'next');
                     return;
                 }
-                
-                // Update current cue
+
                 this.currentCueNumber.textContent = current.number || '--';
                 this.currentCueName.textContent = current.name || 'Unknown';
-                
-                // Update current cue type label
-                const currentType = (current.type || 'unknown').toLowerCase();
-                this.currentCueType.textContent = currentType;
-                this.currentCueType.className = currentType === 'audio' ? 'text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-md' : 'text-xs bg-slate-500/20 text-slate-300 px-2 py-1 rounded-md';
-                
-                // Update next cue
+                applyCueBadge(this.currentCueType, current.type);
+
                 this.nextCueNumber.textContent = next.number || '--';
                 this.nextCueName.textContent = next.name || 'Unknown';
-                
-                // Update next cue type label
-                const nextType = (next.type || 'unknown').toLowerCase();
-                this.nextCueType.textContent = nextType;
-                this.nextCueType.className = nextType === 'audio' ? 'text-xs bg-orange-500/20 text-orange-300 px-2 py-1 rounded-md' : 'text-xs bg-slate-500/20 text-slate-300 px-2 py-1 rounded-md';
+                applyCueBadge(this.nextCueType, next.type, 'next');
             }
             
             updateStatus(status, text) {
                 if (status === 'connected') {
-                    this.statusIndicator.className = 'w-3 h-3 rounded-full bg-green-500 animate-pulse';
-                    this.statusText.className = 'text-sm font-medium text-green-400';
+                    this.statusIndicator.className = 'status-dot status-dot-pulse bg-success';
+                    this.statusText.className = 'fw-semibold text-success';
                 } else {
-                    this.statusIndicator.className = 'w-3 h-3 rounded-full bg-red-500 animate-pulse';
-                    this.statusText.className = 'text-sm font-medium text-slate-300';
+                    this.statusIndicator.className = 'status-dot status-dot-pulse bg-danger';
+                    this.statusText.className = 'fw-semibold text-soft';
                 }
                 this.statusText.textContent = text;
+            }
+            
+            // Volume Control Methods
+            async updateVolumeInfo() {
+                if (!this.connected) {
+                    this.showVolumeUnavailable('Not connected to QLab');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/audio_levels', {
+                        headers: this.getRequestHeaders()
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success && data.levels.available) {
+                        this.volumeLevels = data.levels;
+                        this.updateVolumeControls(data.levels);
+                        this.showVolumeControls();
+                    } else {
+                        this.showVolumeUnavailable(data.levels.error || 'No audio cue selected');
+                    }
+                } catch (error) {
+                    console.error('Error updating volume info:', error);
+                    this.showVolumeUnavailable('Error loading volume levels');
+                }
+            }
+            
+            updateVolumeControls(levels) {
+                // Update sliders and displays
+                this.masterVolumeSlider.value = levels.master;
+                this.ch1VolumeSlider.value = levels.channel1;
+                this.ch2VolumeSlider.value = levels.channel2;
+                
+                this.updateVolumeDisplay('master', levels.master);
+                this.updateVolumeDisplay('channel1', levels.channel1);
+                this.updateVolumeDisplay('channel2', levels.channel2);
+                
+                // Update cue info
+                if (levels.cueName) {
+                    this.volumeCueInfo.textContent = `${levels.cueName}`;
+                } else {
+                    this.volumeCueInfo.textContent = 'Audio cue selected';
+                }
+            }
+            
+            updateVolumeDisplay(channel, level) {
+                let displayElement;
+                switch (channel) {
+                    case 'master':
+                        displayElement = this.masterLevelDisplay;
+                        this.volumeLevels.master = level;
+                        break;
+                    case 'channel1':
+                        displayElement = this.ch1LevelDisplay;
+                        this.volumeLevels.channel1 = level;
+                        break;
+                    case 'channel2':
+                        displayElement = this.ch2LevelDisplay;
+                        this.volumeLevels.channel2 = level;
+                        break;
+                }
+                
+                if (displayElement) {
+                    displayElement.textContent = `${level}dB`;
+                    displayElement.className = 'badge volume-badge';
+
+                    if (level <= -60) {
+                        displayElement.classList.add('volume-muted');
+                    } else if (level < -30) {
+                        displayElement.classList.add('volume-low');
+                    } else if (level < -10) {
+                        displayElement.classList.add('volume-mid');
+                    } else if (level < 0) {
+                        displayElement.classList.add('volume-high');
+                    } else {
+                        displayElement.classList.add('volume-hot');
+                    }
+                }
+            }
+            
+            async setVolumeLevel(channel, level) {
+                if (!this.connected) return;
+                
+                try {
+                    const response = await fetch('/api/audio_level', {
+                        method: 'POST',
+                        headers: this.getRequestHeaders(),
+                        body: JSON.stringify({ channel, level })
+                    });
+                    
+                    const data = await response.json();
+                    if (!data.success) {
+                        console.error(`Failed to set ${channel} volume:`, data.error);
+                        // Revert slider to previous value
+                        this.updateVolumeInfo();
+                    }
+                } catch (error) {
+                    console.error(`Error setting ${channel} volume:`, error);
+                    // Revert slider to previous value
+                    this.updateVolumeInfo();
+                }
+            }
+            
+            toggleMute(channel) {
+                const isMuted = this.mutedChannels.has(channel);
+                
+                if (isMuted) {
+                    // Unmute: restore previous level
+                    const previousLevel = this.previousLevels[channel] || -10; // Default to -10dB if no previous level
+                    this.setVolumeLevel(channel, previousLevel);
+                    this.mutedChannels.delete(channel);
+                    
+                    // Update slider
+                    const slider = document.querySelector(`[data-channel="${channel}"]`);
+                    if (slider && slider.type === 'range') {
+                        slider.value = previousLevel;
+                        this.updateVolumeDisplay(channel, previousLevel);
+                    }
+                    
+                    // Update button
+                    const muteBtn = document.querySelector(`.mute-btn[data-channel="${channel}"]`);
+                    if (muteBtn) {
+                        muteBtn.textContent = '🔇';
+                        muteBtn.title = 'Mute';
+                        muteBtn.classList.remove('btn-danger');
+                        muteBtn.classList.add('btn-outline-glass');
+                    }
+                } else {
+                    // Mute: store current level and set to -60dB (muted)
+                    this.previousLevels[channel] = this.volumeLevels[channel];
+                    this.setVolumeLevel(channel, -60);
+                    this.mutedChannels.add(channel);
+                    
+                    // Update slider
+                    const slider = document.querySelector(`[data-channel="${channel}"]`);
+                    if (slider && slider.type === 'range') {
+                        slider.value = -60;
+                        this.updateVolumeDisplay(channel, -60);
+                    }
+                    
+                    // Update button
+                    const muteBtn = document.querySelector(`.mute-btn[data-channel="${channel}"]`);
+                    if (muteBtn) {
+                        muteBtn.textContent = '🔊';
+                        muteBtn.title = 'Unmute';
+                        muteBtn.classList.remove('btn-outline-glass');
+                        muteBtn.classList.add('btn-danger');
+                    }
+                }
+            }
+            
+            showVolumeControls() {
+                this.volumeUnavailable.classList.add('hidden');
+                this.volumeControls.classList.remove('hidden');
+            }
+            
+            showVolumeUnavailable(message) {
+                this.volumeUnavailable.textContent = message;
+                this.volumeUnavailable.classList.remove('hidden');
+                this.volumeControls.classList.add('hidden');
             }
             
             // Initialize Socket.io listeners for real-time updates
@@ -968,6 +1050,17 @@
                 this.socket.on('cueList', ({ cues }) => {
                     this.populateCueList(cues);
                 });
+                
+                // Listen for volume level updates
+                this.socket.on('volumeLevels', ({ levels }) => {
+                    if (this.connected && levels.available) {
+                        this.volumeLevels = levels;
+                        this.updateVolumeControls(levels);
+                        this.showVolumeControls();
+                    } else {
+                        this.showVolumeUnavailable(levels.error || 'No audio cue selected');
+                    }
+                });
             }
             
             // Workspace Modal Functions
@@ -1008,7 +1101,7 @@
             }
             
             async refreshInstancesInModal() {
-                this.instanceList.innerHTML = '<div class="text-center text-slate-400 py-4">Loading instances...</div>';
+                        this.instanceList.innerHTML = '<div class="text-center text-soft py-4">Loading instances...</div>';
                 
                 await this.refreshInstances();
                 
@@ -1016,28 +1109,21 @@
                 this.instanceList.innerHTML = '';
                 
                 if (this.instances.length === 0) {
-                    this.instanceList.innerHTML = '<div class="text-center text-red-400 py-4">QLab not running or no instances found</div>';
+                    this.instanceList.innerHTML = '<div class="text-center text-danger py-4">QLab not running or no instances found</div>';
                     return;
                 }
                 
                 this.instances.forEach((instance, index) => {
                     const div = document.createElement('div');
-                    div.className = 'instance-option group p-4 border border-slate-600/50 hover:border-blue-400/60 bg-slate-800/30 hover:bg-slate-700/50 rounded-xl cursor-pointer transition-all duration-200 hover:transform hover:scale-[1.01]';
+                    div.className = 'option-card';
+                    div.setAttribute('role', 'button');
                     div.innerHTML = `
-                        <div class="font-medium text-white group-hover:text-blue-100 transition-colors duration-200">${instance.name}</div>
-                        <div class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors duration-200">${instance.ip || 'localhost'}</div>
+                        <div class="fw-semibold">${instance.name}</div>
+                        <div class="small text-soft">${instance.ip || 'localhost'}</div>
                     `;
                     div.addEventListener('click', () => {
-                        // Remove selection from other options
-                        this.instanceList.querySelectorAll('.instance-option').forEach(opt => {
-                            opt.classList.remove('border-blue-500/50', 'bg-blue-600/20', '!border-blue-500', '!bg-blue-600/30');
-                            opt.classList.add('border-slate-600/50');
-                        });
-                        
-                        // Select this option
-                        div.classList.remove('border-slate-600/50');
-                        div.classList.add('!border-blue-500', '!bg-blue-600/30');
-                        
+                        this.instanceList.querySelectorAll('.option-card').forEach(opt => opt.classList.remove('selected'));
+                        div.classList.add('selected');
                         this.selectedInstanceIndex = index;
                         this.nextStepBtn.disabled = false;
                     });
@@ -1049,7 +1135,7 @@
             async refreshWorkspacesInModal() {
                 if (this.selectedInstanceIndex === null) return;
                 
-                this.workspaceList.innerHTML = '<div class="text-center text-slate-400 py-4">Loading workspaces...</div>';
+                this.workspaceList.innerHTML = '<div class="text-center text-soft py-4">Loading workspaces...</div>';
                 
                 try {
                     const response = await fetch(`/api/instances/${this.selectedInstanceIndex}/workspaces`, {
@@ -1064,28 +1150,21 @@
                     this.workspaceList.innerHTML = '';
                     
                     if (!data.workspaces || data.workspaces.length === 0) {
-                        this.workspaceList.innerHTML = '<div class="text-center text-red-400 py-4">No workspaces found on this instance</div>';
+                        this.workspaceList.innerHTML = '<div class="text-center text-danger py-4">No workspaces found on this instance</div>';
                         return;
                     }
                     
                     data.workspaces.forEach((workspace, index) => {
                         const div = document.createElement('div');
-                        div.className = 'workspace-option group p-4 border border-slate-600/50 hover:border-blue-400/60 bg-slate-800/30 hover:bg-slate-700/50 rounded-xl cursor-pointer transition-all duration-200 hover:transform hover:scale-[1.01]';
+                        div.className = 'option-card';
+                        div.setAttribute('role', 'button');
                         div.innerHTML = `
-                            <div class="font-medium text-white group-hover:text-blue-100 transition-colors duration-200">${workspace.name || workspace.id}</div>
-                            <div class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors duration-200">ID: ${workspace.id}</div>
+                            <div class="fw-semibold">${workspace.name || workspace.id}</div>
+                            <div class="small text-soft">ID: ${workspace.id}</div>
                         `;
                         div.addEventListener('click', () => {
-                            // Remove selection from other options
-                            this.workspaceList.querySelectorAll('.workspace-option').forEach(opt => {
-                                opt.classList.remove('border-blue-500/50', 'bg-blue-600/20', '!border-blue-500', '!bg-blue-600/30');
-                                opt.classList.add('border-slate-600/50');
-                            });
-                            
-                            // Select this option
-                            div.classList.remove('border-slate-600/50');
-                            div.classList.add('!border-blue-500', '!bg-blue-600/30');
-                            
+                            this.workspaceList.querySelectorAll('.option-card').forEach(opt => opt.classList.remove('selected'));
+                            div.classList.add('selected');
                             this.selectedWorkspaceId = workspace.id;
                             this.selectedWorkspaceName = workspace.name;
                             this.connectWorkspaceBtn.disabled = false;
@@ -1095,7 +1174,7 @@
                     });
                 } catch (error) {
                     console.error('Failed to load workspaces:', error);
-                    this.workspaceList.innerHTML = '<div class="text-center text-red-400 py-4">Failed to load workspaces</div>';
+                    this.workspaceList.innerHTML = '<div class="text-center text-danger py-4">Failed to load workspaces</div>';
                 }
             }
             
@@ -1129,17 +1208,22 @@
                         
                         // Update workspace display with device name, workspace name, and UUID
                         this.workspaceName.innerHTML = `
-                            <div class="font-medium text-white">${deviceName}</div>
-                            <div class="text-sm text-slate-300">${workspaceName}</div>
-                            <div class="text-xs text-slate-400 font-mono">${workspaceUUID}</div>
+                            <div class="fw-semibold text-white">${deviceName}</div>
+                            <div class="small text-soft">${workspaceName}</div>
+                            <div class="small text-soft opacity-75 font-monospace">${workspaceUUID}</div>
                         `;
                         
                         // Update connection status
                         this.connectionStatus.textContent = 'QLab is running';
-                        this.connectionStatus.className = 'bg-gradient-to-r from-green-600 to-emerald-600 text-center py-3 px-4 rounded-lg text-white font-medium text-sm';
+                        this.connectionStatus.className = 'connection-status alert alert-success text-center';
                         
                         this.hideWorkspaceModal();
                         this.loadCueList();
+                        
+                        // Update volume info after connection
+                        setTimeout(() => {
+                            this.updateVolumeInfo();
+                        }, 500);
                     } else {
                         throw new Error(data.error || 'Connection failed');
                     }
@@ -1172,12 +1256,17 @@
                             this.updateStatus('connected', `Connected to ${data.name}`);
                             this.workspaceName.textContent = data.name;
                             this.connectionStatus.textContent = 'Connected to QLab';
-                            this.connectionStatus.className = 'bg-green-600 text-center py-2 px-4 rounded text-white font-medium';
+                            this.connectionStatus.className = 'connection-status alert alert-success text-center';
                             this.disconnectBtn.style.display = 'inline-block';
                             this.changeWorkspaceBtn.style.display = 'none';
                             
                             // Update cue display
                             this.updateCueDisplay(data.currentCue, data.nextCue);
+                            
+                            // Update volume info
+                            setTimeout(() => {
+                                this.updateVolumeInfo();
+                            }, 500);
                             
                             // Fetch cue list immediately after connection (fallback for real-time updates)
                             this.fetchCueList();
@@ -1192,7 +1281,7 @@
                 } catch (error) {
                     console.error('Direct connection failed:', error);
                     this.connectionStatus.textContent = 'QLab not available - Click "Change Workspace" to retry';
-                    this.connectionStatus.className = 'bg-red-600 text-center py-2 px-4 rounded text-white font-medium';
+                    this.connectionStatus.className = 'connection-status alert alert-danger text-center';
                     this.changeWorkspaceBtn.style.display = 'inline-block';
                 }
             }

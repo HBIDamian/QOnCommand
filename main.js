@@ -67,11 +67,19 @@ app.whenReady().then(async () => {
     await loadSettings();
     createWindow();
 
-    // Auto-start server by default for better UX
+    // Auto-start server only if enabled in settings
     setTimeout(() => {
-        const result = startServer();
-        if (result && !result.success) {
-            console.error('Failed to auto-start server:', result.error);
+        console.log('Checking auto-start setting in main.js...');
+        console.log('Current serverSettings:', JSON.stringify(serverSettings, null, 2));
+        
+        if (serverSettings && serverSettings.autoStart === true) {
+            console.log('Auto-start is enabled - starting server');
+            const result = startServer();
+            if (result && !result.success) {
+                console.error('Failed to auto-start server:', result.error);
+            }
+        } else {
+            console.log('Auto-start is disabled - skipping server start');
         }
     }, 1000);
 

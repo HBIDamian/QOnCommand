@@ -10,7 +10,7 @@ QOnCommand is a cross-platform desktop and web-based remote control application 
 - **🔍 Auto-Discovery**: Automatic detection of QLab instances on your network via Bonjour/Zeroconf
 - **🏢 Multi-Workspace**: Connect to multiple QLab workspaces and instances seamlessly
 - **📊 Performance Monitoring**: Track command latency, success rates, and system performance
-- **🎨 Modern UI**: Beautiful, responsive interface built with Tailwind CSS and glassmorphism design
+- **🎨 Modern UI**: Beautiful, responsive interface built with Bootstrap 5 and glassmorphism design
 - **📱 Mobile-Friendly**: Optimized for tablets and smartphones with touch-friendly controls
 - **💻 Cross-Platform**: Native desktop app for macOS, Windows, and Linux
 - **📦 Single File Executables**: Portable builds that don't require installation
@@ -106,7 +106,7 @@ QOnCommand uses:
 - **Socket.io** for real-time bidirectional communication
 - **OSC** protocol for QLab integration
 - **Bonjour/Zeroconf** for automatic service discovery
-- **Tailwind CSS** for modern responsive UI styling
+- **Bootstrap 5** for modern responsive UI styling
 - **Inter Font** for clean typography
 
 ## Compatibility

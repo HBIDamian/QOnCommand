@@ -598,14 +598,16 @@ class QLabOSCClient {
                     id: selectedCue.uniqueID || '',
                     number: selectedCue.number || '--',
                     name: selectedCue.listName || selectedCue.displayName || selectedCue.name || 'No selection',
-                    type: selectedCue.type || 'unknown'
+                    type: selectedCue.type || 'unknown',
+                    levels: selectedCue.levels || null // Include levels data if available
                 };
                 logger.debug(`✅ Selected cue info: ${selectedCue.number} - ${selectedCue.listName || selectedCue.displayName}`);
             } else {
                 cueData = {
                     number: '--',
                     name: 'No selection',
-                    type: 'unknown'
+                    type: 'unknown',
+                    levels: null
                 };
                 logger.debug(`❌ No selected cue found in response: ${JSON.stringify(result).substring(0, 100)}`);
             }
@@ -798,6 +800,102 @@ class QLabOSCClient {
             return true;
         } catch (error) {
             logger.error(`Error sending panic command: ${error.message}`);
+            return false;
+        }
+    }
+
+    async getAudioLevels() {
+        try {
+            // Get the current selected cue with levels information already included
+            const selectedCue = await this.getSelectedCue();
+            if (!selectedCue || !selectedCue.id) {
+                return {
+                    master: -60,
+                    channel1: -60,
+                    channel2: -60,
+                    available: false,
+                    error: 'No cue selected'
+                };
+            }
+
+            // Check if the selected cue response already contains levels data
+            // The getSelectedCue method already requests levels in valuesForKeys
+            if (selectedCue.levels && Array.isArray(selectedCue.levels) && selectedCue.levels.length > 0) {
+                // QLab returns levels as nested arrays: [[master, ch1, ch2], [other data], [other data]]
+                // The first array contains the main levels in dB format (-60 to +12)
+                const mainLevels = selectedCue.levels[0];
+                if (Array.isArray(mainLevels) && mainLevels.length >= 3) {
+                    return {
+                        master: Math.round(mainLevels[0] * 10) / 10, // Keep as dB, round to 1 decimal
+                        channel1: Math.round(mainLevels[1] * 10) / 10,
+                        channel2: Math.round(mainLevels[2] * 10) / 10,
+                        available: true,
+                        cueId: selectedCue.id,
+                        cueName: selectedCue.name,
+                        cueType: selectedCue.type || 'unknown'
+                    };
+                }
+            }
+            
+            // If no levels in the cached response, the cue might not be an audio cue
+            return {
+                master: -60,
+                channel1: -60,
+                channel2: -60,
+                available: false,
+                error: selectedCue.type === 'Audio' ? 'No audio levels available for this cue' : 'Selected cue is not an audio cue'
+            };
+        } catch (error) {
+            logger.error(`Error getting audio levels: ${error.message}`);
+            return {
+                master: -60,
+                channel1: -60,
+                channel2: -60,
+                available: false,
+                error: error.message
+            };
+        }
+    }
+
+    async setAudioLevel(channel, level) {
+        try {
+            // Get the current selected cue first
+            const selectedCue = await this.getSelectedCue();
+            if (!selectedCue || !selectedCue.id) {
+                throw new Error('No cue selected');
+            }
+
+            // Validate level (dB range: -60 to +12)
+            level = Math.max(-60, Math.min(12, level));
+
+            // Map channel names to indices (QLab uses 0=master, 1=ch1, 2=ch2, etc.)
+            let channelIndex;
+            switch (channel.toLowerCase()) {
+                case 'master':
+                    channelIndex = 0;
+                    break;
+                case 'channel1':
+                case 'ch1':
+                    channelIndex = 1;
+                    break;
+                case 'channel2':
+                case 'ch2':
+                    channelIndex = 2;
+                    break;
+                default:
+                    throw new Error(`Invalid channel: ${channel}`);
+            }
+
+            // Set the audio level for the specific channel (value is already in dB)
+            const address = this.currentWorkspaceId 
+                ? `/workspace/${this.currentWorkspaceId}/cue_id/${selectedCue.id}/sliderLevel/${channelIndex}`
+                : `/cue_id/${selectedCue.id}/sliderLevel/${channelIndex}`;
+            
+            await this.sendOSCMessage(address, [level], false);
+            logger.info(`Set ${channel} level to ${level}dB for cue ${selectedCue.id}`);
+            return true;
+        } catch (error) {
+            logger.error(`Error setting audio level for ${channel}: ${error.message}`);
             return false;
         }
     }
@@ -1204,6 +1302,29 @@ class QLabClientWrapper {
 
 
 
+    async getAudioLevels() {
+        try {
+            return await this.client.getAudioLevels();
+        } catch (error) {
+            return {
+                master: 0,
+                channel1: 0,
+                channel2: 0,
+                available: false,
+                error: error.message
+            };
+        }
+    }
+
+    async setAudioLevel(channel, level) {
+        try {
+            return await this.client.setAudioLevel(channel, level);
+        } catch (error) {
+            logger.error(`Error in wrapper setAudioLevel: ${error.message}`);
+            return false;
+        }
+    }
+
     cleanup() {
         // No cleanup needed for AppleScript
     }
@@ -1601,6 +1722,10 @@ app.post('/api/connect/:instanceId/:workspaceId', async (req, res) => {
         // Send initial cue info to this client
         setTimeout(() => {
             updateCueInfoForClient(clientId);
+            // Also send initial volume info
+            setTimeout(() => {
+                updateVolumeInfoForAllClients(workspaceId);
+            }, 200);
         }, 100);
         
         // Fetch and emit cue list asynchronously
@@ -1696,6 +1821,10 @@ app.post('/api/connect/:instanceId', async (req, res) => {
         // Send initial cue info to this client
         setTimeout(() => {
             updateCueInfoForClient(clientId);
+            // Also send initial volume info
+            setTimeout(() => {
+                updateVolumeInfoForAllClients(workspaceId);
+            }, 200);
         }, 100);
         
         // Fetch and emit cue list asynchronously in the background (non-blocking)
@@ -1773,6 +1902,10 @@ app.post('/api/connect_direct', async (req, res) => {
         // Send initial cue info to this client
         setTimeout(() => {
             updateCueInfoForClient(clientId);
+            // Also send initial volume info
+            setTimeout(() => {
+                updateVolumeInfoForAllClients(workspaceId);
+            }, 200);
         }, 100);
         
         // Fetch and emit cue list asynchronously in the background (non-blocking)
@@ -1875,6 +2008,13 @@ app.post('/api/command/:command', async (req, res) => {
             // Small delay to allow QLab to process the command before querying
             setTimeout(() => {
                 updateAllClientsCueInfo();
+                
+                // Also update volume info when cue changes
+                if (['next', 'previous'].includes(command)) {
+                    setTimeout(() => {
+                        updateVolumeInfoForAllClients(clientData.workspaceId);
+                    }, 200); // Extra delay for volume info
+                }
             }, 100);
         }
         
@@ -1998,6 +2138,10 @@ app.post('/api/skip', async (req, res) => {
         if (success) {
             setTimeout(() => {
                 updateAllClientsCueInfo();
+                // Update volume info when cue selection changes
+                setTimeout(() => {
+                    updateVolumeInfoForAllClients(clientData.workspaceId);
+                }, 200); // Extra delay for volume info
             }, 100);
         }
         
@@ -2055,6 +2199,85 @@ app.get('/api/cues', async (req, res) => {
     } catch (error) {
         logger.error(`Error getting cues for client ${clientId}: ${error.message}`);
         res.json({ cues: [] });
+    }
+});
+
+// Volume Control Endpoints
+app.get('/api/audio_levels', async (req, res) => {
+    const clientId = getClientId(req);
+    const clientData = clientConnections.get(clientId);
+    
+    if (!clientData || !clientData.workspaceId) {
+        return res.json({ 
+            success: false, 
+            error: "Not connected to any QLab instance",
+            levels: { master: 0, channel1: 0, channel2: 0, available: false }
+        });
+    }
+    
+    const client = getWorkspaceClient(clientData.workspaceId);
+    if (!client) {
+        return res.json({ 
+            success: false, 
+            error: "Workspace connection lost",
+            levels: { master: 0, channel1: 0, channel2: 0, available: false }
+        });
+    }
+    
+    try {
+        const levels = await client.getAudioLevels();
+        res.json({
+            success: true,
+            levels: levels
+        });
+    } catch (error) {
+        logger.error(`Error getting audio levels: ${error.message}`);
+        res.json({
+            success: false,
+            error: error.message,
+            levels: { master: 0, channel1: 0, channel2: 0, available: false }
+        });
+    }
+});
+
+app.post('/api/audio_level', async (req, res) => {
+    const clientId = getClientId(req);
+    const clientData = clientConnections.get(clientId);
+    
+    if (!clientData || !clientData.workspaceId) {
+        return res.json({ success: false, error: "Not connected to any QLab instance" });
+    }
+    
+    const { channel, level } = req.body;
+    if (!channel || level === undefined) {
+        return res.json({ success: false, error: "Missing channel or level parameter" });
+    }
+    
+    const client = getWorkspaceClient(clientData.workspaceId);
+    if (!client) {
+        return res.json({ success: false, error: "Workspace connection lost" });
+    }
+    
+    try {
+        const success = await client.setAudioLevel(channel, level);
+        
+        if (success) {
+            // Broadcast volume change to all connected clients for this workspace
+            setTimeout(() => {
+                updateVolumeInfoForAllClients(clientData.workspaceId);
+            }, 100); // Small delay to allow QLab to process the change
+        }
+        
+        res.json({
+            success,
+            message: success ? `${channel} level set to ${level}%` : 'Failed to set audio level'
+        });
+    } catch (error) {
+        logger.error(`Error setting audio level: ${error.message}`);
+        res.json({
+            success: false,
+            error: error.message
+        });
     }
 });
 
@@ -2157,6 +2380,31 @@ async function updateAllClientsCueInfo() {
         
         updateTimeout = null;
     }, UPDATE_DEBOUNCE_MS);
+}
+
+// Update volume levels for all clients connected to a specific workspace
+async function updateVolumeInfoForAllClients(workspaceId) {
+    const client = getWorkspaceClient(workspaceId);
+    if (!client) return;
+    
+    try {
+        const levels = await client.getAudioLevels();
+        
+        // Send volume update to all clients connected to this workspace
+        for (const [socketId, clientData] of clientConnections.entries()) {
+            if (clientData.workspaceId === workspaceId) {
+                io.to(socketId).emit('volumeLevels', {
+                    levels: levels,
+                    timestamp: Date.now()
+                });
+            }
+        }
+        
+        logger.debug(`Volume levels updated for workspace ${workspaceId}: master=${levels.master}%, ch1=${levels.channel1}%, ch2=${levels.channel2}%`);
+        
+    } catch (error) {
+        logger.warn(`Error updating volume info for workspace ${workspaceId}: ${error.message}`);
+    }
 }
 
 // Start server

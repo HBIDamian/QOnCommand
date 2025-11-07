@@ -4,14 +4,14 @@ This document outlines the external assets used in the QOnCommand project, their
 
 ## CSS Frameworks
 
-### Tailwind CSS
-- **Asset**: `public/assets/css/tailwind.min.css`
-- **Source**: https://tailwindcss.com/
-- **Version**: 2.2.19 (minified)
+### Bootstrap 5
+- **Asset**: `public/assets/css/bootstrap.min.css` & `public/assets/js/bootstrap.bundle.min.js`
+- **Source**: https://getbootstrap.com/
+- **Version**: 5.3.2 (minified)
 - **License**: MIT License
-- **Copyright**: Copyright (c) Tailwind Labs, Inc.
-- **License URL**: https://github.com/tailwindlabs/tailwindcss/blob/master/LICENSE
-- **Usage**: Primary CSS framework for application styling
+- **Copyright**: Copyright (c) 2011-2023 The Bootstrap Authors
+- **License URL**: https://github.com/twbs/bootstrap/blob/main/LICENSE
+- **Usage**: Primary CSS framework and JavaScript components for responsive UI
 
 ## Fonts
 
@@ -40,10 +40,10 @@ This document outlines the external assets used in the QOnCommand project, their
 
 ## CDN Resources (Development/Fallback)
 
-### Tailwind CSS CDN
-- **Source**: https://cdn.tailwindcss.com
+### Bootstrap CDN
+- **Source**: https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/
 - **License**: MIT License
-- **Usage**: Development and styling reference (not included in production build)
+- **Usage**: Development reference and fallback (local files used in production)
 
 ### Google Fonts CDN
 - **Source**: https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap
@@ -61,7 +61,7 @@ All external assets used in this project are licensed under permissive open-sour
 ## Attribution Requirements
 
 - **Inter Font**: No attribution required (SIL OFL 1.1)
-- **Tailwind CSS**: No attribution required (MIT License)
+- **Bootstrap**: No attribution required (MIT License)
 - **Socket.IO**: No attribution required (MIT License)
 
 ## Asset Versions & Updates
@@ -76,7 +76,7 @@ This document reflects the asset versions as of November 5, 2025. When updating 
 ## Local Asset Sources
 
 All local assets were downloaded from their official sources:
-- Tailwind CSS: Downloaded from official CDN
+- Bootstrap: Downloaded from official CDN (CSS and JavaScript bundle)
 - Inter Fonts: Downloaded from Google Fonts in WOFF2 format
 - Socket.IO: Downloaded from official npm CDN
 
