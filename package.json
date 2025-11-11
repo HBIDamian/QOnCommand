@@ -12,7 +12,7 @@
     "test-osc": "node test-osc.js",
     "build": "electron-builder --publish=never",
     "build:mac": "electron-builder --mac --publish=never",
-    "build:win": "electron-builder --win --publish=never", 
+    "build:win": "electron-builder --win --publish=never",
     "build:linux": "electron-builder --linux --publish=never",
     "build:all": "electron-builder --mac --win --linux --publish=never",
     "pack": "electron-builder --dir",
@@ -32,7 +32,9 @@
   "devDependencies": {
     "electron": "^36.4.0",
     "electron-builder": "^26.0.12",
-    "nodemon": "^3.0.1"
+    "icon-gen": "^5.0.0",
+    "nodemon": "^3.0.1",
+    "sharp": "^0.34.5"
   },
   "keywords": [
     "qlab",
@@ -78,7 +80,10 @@
       "target": [
         {
           "target": "default",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "singleArchFiles": "*"
@@ -88,7 +93,9 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -97,7 +104,9 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Audio"

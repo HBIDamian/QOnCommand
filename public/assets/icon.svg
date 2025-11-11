@@ -1,0 +1,62 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Purple background gradient -->
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b078ff"/>
+      <stop offset="100%" stop-color="#632b92"/>
+    </linearGradient>
+
+    <!-- Silver gradient border -->
+    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fdca30"/>
+      <stop offset="50%" stop-color="#594b08"/>
+      <stop offset="100%" stop-color="#bba11b"/>
+    </linearGradient>
+
+    <!-- Black gradient for power button -->
+    <linearGradient id="blackGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#000000"/>
+      <stop offset="100%" stop-color="#434343"/>
+    </linearGradient>
+
+    <!-- MacOS-style button gradients -->
+    <radialGradient id="redGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff5f56"/>
+      <stop offset="100%" stop-color="#d94336"/>
+    </radialGradient>
+    <radialGradient id="orangeGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffbd2e"/>
+      <stop offset="100%" stop-color="#e6a229"/>
+    </radialGradient>
+    <radialGradient id="greenGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#27c93f"/>
+      <stop offset="100%" stop-color="#1a9b2d"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Outer silver ring -->
+  <circle cx="256" cy="256" r="246" fill="url(#silverGrad)"/>
+
+  <!-- Inner purple circle -->
+  <circle cx="256" cy="256" r="220" fill="url(#purpleGrad)"/>
+
+  <!-- Remote Icon (thin lines) -->
+  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Body of remote -->
+    <rect x="200" y="130" width="112" height="255" rx="24" ry="24" />
+  </g>
+
+  <!-- Black gradient power button -->
+  <circle cx="256" cy="195" r="28" fill="url(#blackGrad)" stroke="#ffffff" stroke-width="8"/>
+
+  <!-- Buttons -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#ffffff" stroke-width="8">
+    <!-- Power button line -->
+    <line stroke-width="8" x1="256" y1="155" x2="256" y2="180" />
+  </g>
+
+  <!-- Function buttons with gradient fill -->
+  <circle cx="256" cy="265" r="14" fill="url(#redGrad)" stroke="#ffffff" stroke-width="6"/>
+  <circle cx="256" cy="305" r="14" fill="url(#orangeGrad)" stroke="#ffffff" stroke-width="6"/>
+  <circle cx="256" cy="345" r="14" fill="url(#greenGrad)" stroke="#ffffff" stroke-width="6"/>
+</svg>
