@@ -289,10 +289,8 @@ function startServerInProcess() {
         const requiredDependencies = [
             'express', 
             'socket.io', 
-            'node-osascript', 
             'winston', 
             'cors',
-            'depd',
             'body-parser'
         ];
         
@@ -520,10 +518,8 @@ ipcMain.handle('check-dependencies', async () => {
     const criticalDependencies = [
         'express', 
         'socket.io', 
-        'node-osascript', 
         'winston', 
         'cors',
-        'depd',
         'body-parser'
     ];
     
