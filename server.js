@@ -31,10 +31,27 @@ const WEB_PORT = parseInt(process.env.WEB_PORT) || 7522;
 const BUNDLE_ID = 'com.figure53.QLab.4';
 
 // Logging configuration
-const LOG_LEVEL = process.env.LOG_LEVEL || 'info'; // Changed from debug to info for better performance
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
 const LOG_TO_FILE = process.env.LOG_TO_FILE === 'true' || false;
+// LOG_TIMING_FILE writes a separate log-ddmmyy-hhmmss.log (timestamped at server
+// start) where every line carries a Unix millisecond timestamp - useful for
+// frame-accurate Wireshark correlation.
+const LOG_TIMING_FILE = process.env.LOG_TIMING_FILE === 'true' || false;
 
-// Configure Winston logger
+// Build the filename once at startup: log-230426-142305.log
+function buildTimingLogFilename() {
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yy = String(now.getFullYear()).slice(-2);
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    return `log-${dd}${mm}${yy}-${hh}${min}${ss}.log`;
+}
+const TIMING_LOG_FILENAME = buildTimingLogFilename();
+
+// Standard log format (ISO timestamp)
 const logFormat = winston.format.combine(
     winston.format.timestamp(),
     winston.format.printf(({ timestamp, level, message }) => {
@@ -42,10 +59,26 @@ const logFormat = winston.format.combine(
     })
 );
 
+// Millisecond-precision format for the timing log file.
+// Each line: <unix-ms-epoch>  <ISO timestamp>  LEVEL  message
+// The unix-ms column is what you paste into Wireshark's "time reference" field.
+const timingFormat = winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.printf(({ timestamp, level, message }) => {
+        return `${Date.now()}\t${timestamp}\t${level.toUpperCase()}\t${message}`;
+    })
+);
+
 const transports = [new winston.transports.Console()];
 if (LOG_TO_FILE) {
-    transports.push(new winston.transports.File({ 
-        filename: path.join(__dirname, 'qoncommand.log') 
+    transports.push(new winston.transports.File({
+        filename: path.join(__dirname, 'qoncommand.log')
+    }));
+}
+if (LOG_TIMING_FILE) {
+    transports.push(new winston.transports.File({
+        filename: path.join(__dirname, TIMING_LOG_FILENAME),
+        format: timingFormat
     }));
 }
 
@@ -142,7 +175,15 @@ let totalLatencyMs = 0.0;
 
 // Global OSC port singleton - shared across all clients
 let globalOSCPort = null;
-let globalOSCCallbacks = new Map();
+let globalOSCHost = null;
+let globalOSCPortNumber = null;
+let globalWorkspaceId = null; // Last connected workspace ID for reconnect
+
+// Serialized OSC request queue - prevents FIFO reply mismatches caused by
+// stray replies from fire-and-forget messages (e.g. /updates, /go) arriving
+// at the wrong callback.
+let currentPendingReply = null; // { resolve, reject, timeout }
+let oscRequestQueue = [];       // Array of { oscMessage, expectReply, resolve, reject }
 
 // Global OSC message handler function
 function handleGlobalOSCMessage(oscMessage) {
@@ -178,21 +219,20 @@ function handleGlobalOSCMessage(oscMessage) {
                 parsedData = args.map(arg => arg.value);
             }
             
-            // For TCP OSC, we can safely use FIFO since TCP guarantees order
-            // But let's also handle the case where no callbacks are waiting
-            const globalCallbacks = Array.from(globalOSCCallbacks.entries());
-            if (globalCallbacks.length > 0) {
-                const [callbackId, callback] = globalCallbacks[0];
-                globalOSCCallbacks.delete(callbackId);
-                
-                // Reduced logging for performance
+            // Deliver reply to the single pending callback (serialized queue approach)
+            if (currentPendingReply) {
+                const { resolve, reject, timeout } = currentPendingReply;
+                currentPendingReply = null;
+                clearTimeout(timeout);
                 if (parsedData !== null) {
-                    callback(null, parsedData);
+                    resolve(parsedData);
                 } else {
-                    callback(new Error(`QLab returned error`), null);
+                    reject(new Error('QLab returned error status'));
                 }
+                // Process next queued request now that this one is complete
+                processNextOSCRequest();
             } else {
-                // Silently handle when no callbacks are waiting
+                logger.debug(`OSC reply received with no pending callback (address: ${address}) - likely a stray reply, ignoring`);
             }
         } else if (address.includes('update')) {
             // Handle live update messages as per QParser.cs pattern
@@ -216,13 +256,130 @@ function handleGlobalOSCMessage(oscMessage) {
                 updateAllClientsCueInfo();
             }
         } else if (address.includes('thump')) {
-            // Heartbeat message - just log at debug level
-            logger.debug('QLab heartbeat received');
+            // QLab heartbeat - confirms connection is alive
+            logger.debug('QLab heartbeat (thump) received');
         } else {
             logger.debug(`Unhandled OSC message: ${address}`);
         }
     } catch (error) {
         logger.error(`Error handling global OSC message: ${error.message}`);
+    }
+}
+
+/**
+ * Process the next request in the serialized OSC queue.
+ * Must only be called when currentPendingReply is null.
+ */
+function processNextOSCRequest() {
+    if (currentPendingReply || oscRequestQueue.length === 0) return;
+
+    const { oscMessage, expectReply, resolve, reject } = oscRequestQueue.shift();
+
+    if (!expectReply) {
+        // Fire-and-forget: send and resolve immediately without blocking the queue
+        try {
+            if (globalOSCPort) globalOSCPort.send(oscMessage);
+        } catch (err) {
+            logger.warn(`OSC fire-and-forget send failed for ${oscMessage.address}: ${err.message}`);
+        }
+        resolve(true);
+        // Continue draining the queue
+        processNextOSCRequest();
+        return;
+    }
+
+    // Expects reply: set as the single pending callback with timeout
+    const timeout = setTimeout(() => {
+        if (currentPendingReply && currentPendingReply.reject === reject) {
+            currentPendingReply = null;
+            logger.warn(`OSC reply timeout for ${oscMessage.address}`);
+            reject(new Error(`OSC reply timeout for ${oscMessage.address}`));
+            processNextOSCRequest();
+        }
+    }, 5000);
+
+    currentPendingReply = { resolve, reject, timeout };
+
+    try {
+        if (!globalOSCPort) {
+            clearTimeout(timeout);
+            currentPendingReply = null;
+            reject(new Error('OSC port not connected'));
+            processNextOSCRequest();
+            return;
+        }
+        globalOSCPort.send(oscMessage);
+    } catch (err) {
+        clearTimeout(timeout);
+        currentPendingReply = null;
+        reject(err);
+        processNextOSCRequest();
+    }
+}
+
+/**
+ * Attempt to reconnect to QLab using the last known host/port.
+ */
+function reconnectGlobalOSCPort() {
+    if (globalOSCPort) return; // Already connected
+    if (!globalOSCHost || !globalOSCPortNumber) {
+        logger.warn('Cannot reconnect OSC: no host/port stored');
+        return;
+    }
+
+    logger.info(`Attempting OSC reconnection to ${globalOSCHost}:${globalOSCPortNumber}...`);
+
+    try {
+        globalOSCPort = new osc.TCPSocketPort({
+            address: globalOSCHost,
+            port: globalOSCPortNumber,
+            metadata: true
+        });
+
+        globalOSCPort.on('message', handleGlobalOSCMessage);
+        globalOSCPort.on('error', (err) => {
+            logger.error(`OSC TCP reconnect error: ${err.message}`);
+        });
+        globalOSCPort.on('close', () => {
+            logger.warn('Reconnected OSC port closed again - will retry');
+            globalOSCPort = null;
+            _drainQueueWithError('OSC connection closed');
+            setTimeout(reconnectGlobalOSCPort, 3000);
+        });
+        globalOSCPort.on('ready', () => {
+            logger.info(`OSC reconnected to QLab at ${globalOSCHost}:${globalOSCPortNumber}`);
+            // Re-authenticate to last workspace so updates resume
+            if (globalWorkspaceId) {
+                setTimeout(() => {
+                    try {
+                        globalOSCPort.send({ address: `/workspace/${globalWorkspaceId}/connect`, args: [] });
+                        globalOSCPort.send({ address: `/workspace/${globalWorkspaceId}/updates`, args: [{ type: 'i', value: 1 }] });
+                        logger.info(`Re-authenticated to workspace ${globalWorkspaceId} after reconnect`);
+                    } catch (e) {
+                        logger.warn(`Workspace re-auth after reconnect failed: ${e.message}`);
+                    }
+                }, 500);
+            }
+        });
+
+        globalOSCPort.open();
+    } catch (err) {
+        logger.error(`OSC reconnection setup failed: ${err.message}`);
+        globalOSCPort = null;
+        setTimeout(reconnectGlobalOSCPort, 5000);
+    }
+}
+
+function _drainQueueWithError(message) {
+    if (currentPendingReply) {
+        const { reject, timeout } = currentPendingReply;
+        clearTimeout(timeout);
+        currentPendingReply = null;
+        reject(new Error(message));
+    }
+    while (oscRequestQueue.length > 0) {
+        const { reject } = oscRequestQueue.shift();
+        reject(new Error(message));
     }
 }
 
@@ -265,45 +422,43 @@ class QLabOSCClient {
             // Use global OSC port (singleton pattern to avoid port conflicts)
             // Using TCP as per QLab OSC specification and C# reference implementation
             if (!globalOSCPort) {
+                // Store connection info globally for reconnection
+                globalOSCHost = this.host || "127.0.0.1";
+                globalOSCPortNumber = this.port || 53000;
+
                 globalOSCPort = new osc.TCPSocketPort({
-                    address: this.host || "127.0.0.1",
-                    port: this.port || 53000,
+                    address: globalOSCHost,
+                    port: globalOSCPortNumber,
                     metadata: true
                 });
-                
+
                 // Handle incoming OSC messages
                 globalOSCPort.on('message', handleGlobalOSCMessage);
-                
+
                 // Handle errors
                 globalOSCPort.on('error', (err) => {
                     logger.error(`Global OSC TCP Port error: ${err.message}`);
                 });
-                
-                // Handle connection close
+
+                // Handle connection close - drain pending requests and schedule reconnect
                 globalOSCPort.on('close', () => {
-                    logger.warn('Global OSC TCP Port closed - will reconnect on next use');
-                    globalOSCPort = null; // Allow reconnection
+                    logger.warn('Global OSC TCP Port closed - draining queue and scheduling reconnect');
+                    globalOSCPort = null;
+                    _drainQueueWithError('OSC connection closed');
+                    setTimeout(reconnectGlobalOSCPort, 2000);
                 });
-                
+
                 // Handle ready event
                 globalOSCPort.on('ready', () => {
-                    logger.info(`Global OSC TCP Port connected to QLab on ${this.host || "127.0.0.1"}:${this.port || 53000}`);
+                    logger.info(`Global OSC TCP Port connected to QLab on ${globalOSCHost}:${globalOSCPortNumber}`);
                 });
-                
+
                 // Open the connection
                 globalOSCPort.open();
             }
-            
-            this.oscPort = globalOSCPort;
 
-            logger.info(`OSC Client initialized - will send to ${this.host}:${this.port}, listening on port ${this.replyPort}`);
-            
-            // Auto-discover workspace after a short delay to let OSC stabilize
-            setTimeout(() => {
-                this.autoSelectWorkspace().catch(err => {
-                    logger.warn(`Auto workspace selection failed: ${err.message}`);
-                });
-            }, 1000);
+            this.oscPort = globalOSCPort;
+            logger.info(`OSC Client initialized - will send to ${this.host}:${this.port}`);
             
         } catch (error) {
             logger.error(`Failed to initialize OSC: ${error.message}`);
@@ -366,56 +521,34 @@ class QLabOSCClient {
 
 
     async sendOSCMessage(address, args = [], expectReply = false) {
-        return new Promise((resolve, reject) => {
-            try {
-                // Build OSC message with the osc library format
-                const oscMessage = {
-                    address: address,
-                    args: args.map(arg => ({
-                        type: typeof arg === 'number' ? (Number.isInteger(arg) ? 'i' : 'f') : 's',
-                        value: arg
-                    }))
-                };
-                
-                if (expectReply) {
-                    const callbackId = ++this.callbackIdCounter;
-                    const timeout = setTimeout(() => {
-                        // Check and clean up from global callbacks
-                        if (globalOSCCallbacks.has(callbackId)) {
-                            globalOSCCallbacks.delete(callbackId);
-                            logger.warn(`OSC message timeout for ${address} after 10 seconds`);
-                            errorCount++;
-                            reject(new Error('OSC message timeout'));
-                        }
-                    }, 10000); // 10 second timeout for TCP (increased for stability)
+        // Always sync to the current global port (handles reconnections transparently)
+        this.oscPort = globalOSCPort;
 
-                    const callbackFn = (error, result) => {
-                        clearTimeout(timeout);
-                        if (error) {
-                            reject(error);
-                        } else {
-                            resolve(result);
-                        }
-                    };
-                    
-                    // Store in global callback map
-                    globalOSCCallbacks.set(callbackId, callbackFn);
-                }
-
-                // Send the OSC message via TCP connection
-                this.oscPort.send(oscMessage);
-                // Reduced logging for performance - only log important messages
-                if (address.includes('connect') || address.includes('workspace') && !address.includes('/cue/selected/')) {
-                    logger.debug(`OSC: ${address}`);
-                }
-                
-                if (!expectReply) {
-                    resolve(true);
-                }
-            } catch (error) {
-                logger.error(`OSC sendMessage error: ${error.message}`);
-                reject(error);
+        if (!this.oscPort) {
+            // Port might be reconnecting - give it a brief window
+            reconnectGlobalOSCPort();
+            await new Promise(r => setTimeout(r, 600));
+            this.oscPort = globalOSCPort;
+            if (!this.oscPort) {
+                throw new Error('OSC not connected - QLab unavailable');
             }
+        }
+
+        const oscMessage = {
+            address: address,
+            args: args.map(arg => ({
+                type: typeof arg === 'number' ? (Number.isInteger(arg) ? 'i' : 'f') : 's',
+                value: arg
+            }))
+        };
+
+        if (address.includes('connect') || (address.includes('workspace') && !address.includes('/cue/selected/'))) {
+            logger.debug(`OSC queuing: ${address} (expectReply=${expectReply})`);
+        }
+
+        return new Promise((resolve, reject) => {
+            oscRequestQueue.push({ oscMessage, expectReply, resolve, reject });
+            processNextOSCRequest();
         });
     }
 
@@ -520,14 +653,17 @@ class QLabOSCClient {
                 await this.sendOSCMessage(`/workspace/${workspaceId}/connect`, [], true);
                 logger.info(`Connected to workspace: ${workspaceId}`);
                 
-                // Enable updates as per QUpdater.cs pattern
-                await this.sendOSCMessage('/updates', [1], false);
+                // Enable live updates - QLab does NOT send a reply to /updates,
+                // so this must be fire-and-forget (expectReply=false) to avoid a
+                // guaranteed 5-second timeout stall on every connection.
+                globalWorkspaceId = workspaceId;
+                await this.sendOSCMessage(`/workspace/${workspaceId}/updates`, [1], false);
                 logger.info(`Enabled live updates for workspace: ${workspaceId}`);
-                
+
                 // Request cue lists as per QUpdater connection flow
                 await this.sendOSCMessage(`/workspace/${workspaceId}/cueLists`, [], true);
                 logger.info(`Requested cue lists for workspace: ${workspaceId}`);
-                
+
             } else {
                 // Using default/first workspace - no explicit connect needed
                 logger.info(`Using default workspace (empty ID)`);
@@ -1027,7 +1163,8 @@ class QLabOSCClient {
                 name: displayName,
                 originalName: cue.listName || cue.displayName || "Unnamed",
                 originalIndex: i,
-                depth: depth
+                depth: depth,
+                type: cue.type || 'unknown'
             });
 
             // Process nested cues (groups)
@@ -1109,8 +1246,6 @@ class QLabClientWrapper {
         this.lastSelectedCueId = null;
         this.lastSelectionTime = 0;
         this.lastNextCueUpdate = 0;
-        
-        this.initialize();
     }
 
     async initialize() {
@@ -1120,8 +1255,9 @@ class QLabClientWrapper {
                 this.connected = true;
                 this.connectionError = null;
                 
-                // Skip workspace setting if using default ID
-                if (this.workspaceId && this.workspaceId !== "applescript" && this.workspaceId !== "default") {
+                // Skip workspace setting if using default ID or already connected to same workspace
+                if (this.workspaceId && this.workspaceId !== "applescript" && this.workspaceId !== "default"
+                    && this.client.currentWorkspaceId !== this.workspaceId) {
                     if (await this.client.setActiveWorkspace(this.workspaceId)) {
                         logger.info(`Set active workspace to ID: ${this.workspaceId}`);
                     } else {
@@ -1179,13 +1315,36 @@ class QLabClientWrapper {
     }
 
     async getCurrentSelectedCue() {
-        // Don't call updateCueInfo here - let it be called periodically
-        return this.currentSelectedCue;
+        // Call live OSC method so the REST endpoint always gets fresh data
+        return await this.client.getSelectedCue();
     }
 
     async getNextCue() {
-        // Don't call updateCueInfo here - let it be called periodically  
-        return this.nextCue;
+        // Call live OSC method so the REST endpoint always gets fresh data
+        return await this.client.getNextCue();
+    }
+
+    /**
+     * Returns the next cue after currentCueId using the in-memory cachedCues flat list,
+     * avoiding a full /cueLists OSC round-trip on every playback position update.
+     * Falls back to { number: '--', name: 'End of list', type: 'unknown' } when the
+     * cache is empty or the cue is not found.
+     */
+    getNextCueFromCache(currentCueId) {
+        if (!currentCueId || !this.cachedCues || this.cachedCues.length === 0) {
+            return { number: '--', name: 'No selection', type: 'unknown' };
+        }
+        const idx = this.cachedCues.findIndex(c => c.id === currentCueId);
+        if (idx === -1 || idx >= this.cachedCues.length - 1) {
+            return { number: '--', name: 'End of list', type: 'unknown' };
+        }
+        const next = this.cachedCues[idx + 1];
+        return {
+            id: next.id,
+            number: next.number,
+            name: next.originalName,
+            type: next.type || 'unknown'
+        };
     }
 
     async play() {
@@ -1986,9 +2145,6 @@ app.post('/api/command/:command', async (req, res) => {
             case "reset":
                 success = await client.reset();
                 break;
-            case "panic":
-                success = await client.panic();
-                break;
             default:
                 success = false;
                 errorMsg = `Unknown command: ${command}`;
@@ -2320,9 +2476,10 @@ async function updateCueInfoForClient(socketId) {
     try {
         logger.info(`Updating cue info for client ${socketId}`);
         
-        // Get current and next cue info using shared workspace connection
+        // Get current cue via OSC; compute next cue from the in-memory flat cache
+        // to avoid a full /cueLists round-trip on every playback position update.
         const currentCue = await client.client.getSelectedCue();
-        const nextCue = await client.client.getNextCue();
+        const nextCue = client.getNextCueFromCache(currentCue ? currentCue.id : null);
         
         // Update client-specific data
         if (currentCue) clientData.selectedCue = currentCue;

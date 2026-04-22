@@ -4,6 +4,22 @@ const fs = require('fs').promises;
 const { spawn, exec } = require('child_process');
 const os = require('os');
 
+// ─── Debug Configuration ──────────────────────────────────────────────────────
+// Set DEBUG_MODE to true to enable verbose debug logging throughout the app
+// and server. This sets LOG_LEVEL to 'debug' on the spawned server process,
+// enabling OSC message traces, reply timing, queue state, and cue update events.
+// Set CONSOLE_PASSTHROUGH to true to also mirror all server stdout/stderr output
+// directly to the Electron main-process terminal console (useful alongside
+// Wireshark recordings so log timestamps can be correlated with packet timings).
+const DEBUG_MODE = false;
+const CONSOLE_PASSTHROUGH = false;
+// Set LOG_TIMING_FILE to true to write a timestamped log file named
+// log-ddmmyy-hhmmss.log (e.g. log-230426-142305.log), created fresh each server
+// start. Every line is prefixed with a Unix millisecond timestamp so entries can
+// be correlated frame-accurately against Wireshark packet capture times.
+const LOG_TIMING_FILE = false;
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Server management
 let serverProcess = null;
 let inProcessServer = null; // Track in-process server instance
@@ -163,11 +179,15 @@ function startServer() {
             workingDir = __dirname;
         }
 
+        // DEBUG_MODE overrides the saved log level to 'debug'
+        const effectiveLogLevel = DEBUG_MODE ? 'debug' : serverSettings.logLevel;
+
         const env = {
             ...process.env,
             WEB_PORT: serverSettings.port.toString(),
-            LOG_LEVEL: serverSettings.logLevel,
-            LOG_TO_FILE: serverSettings.logToFile.toString()
+            LOG_LEVEL: effectiveLogLevel,
+            LOG_TO_FILE: serverSettings.logToFile.toString(),
+            LOG_TIMING_FILE: LOG_TIMING_FILE.toString()
         };
 
         // Find the actual Node.js executable (not Electron)
@@ -191,11 +211,13 @@ function startServer() {
         serverProcess.stdout.on('data', (data) => {
             const message = data.toString();
             sendToRenderer('server-log', { message, level: 'info' });
+            if (CONSOLE_PASSTHROUGH) process.stdout.write('[server] ' + message);
         });
 
         serverProcess.stderr.on('data', (data) => {
             const message = data.toString();
             sendToRenderer('server-log', { message, level: 'error' });
+            if (CONSOLE_PASSTHROUGH) process.stderr.write('[server:err] ' + message);
         });
 
         serverProcess.on('close', (code) => {
@@ -273,9 +295,11 @@ function startServerInProcess() {
         console.log('Starting server in-process using path:', serverPath);
         
         // Set environment variables for the server
+        // DEBUG_MODE overrides the saved log level to 'debug'
         process.env.WEB_PORT = serverSettings.port.toString();
-        process.env.LOG_LEVEL = serverSettings.logLevel;
+        process.env.LOG_LEVEL = DEBUG_MODE ? 'debug' : serverSettings.logLevel;
         process.env.LOG_TO_FILE = serverSettings.logToFile.toString();
+        process.env.LOG_TIMING_FILE = LOG_TIMING_FILE.toString();
         
         // Delete from require cache to ensure fresh load
         const resolvedPath = require.resolve(serverPath);
