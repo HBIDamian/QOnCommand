@@ -11,7 +11,7 @@
     "server:browser": "node server.js & sleep 2 && open http://localhost:7522",
     "test-osc": "node test-osc.js",
     "build": "electron-builder --publish=never",
-    "build:mac": "electron-builder --mac --publish=never",
+    "build:mac": "rm -rf dist/mac dist/mac-arm64 && electron-builder --mac --publish=never",
     "build:win": "electron-builder --win --publish=never",
     "build:linux": "electron-builder --linux --publish=never",
     "build:all": "electron-builder --mac --win --linux --publish=never",
@@ -30,7 +30,7 @@
     "winston": "^3.10.0"
   },
   "devDependencies": {
-    "electron": "^36.4.0",
+    "electron": "^41.3.0",
     "electron-builder": "^26.0.12",
     "icon-gen": "^5.0.0",
     "nodemon": "^3.0.1",
@@ -50,9 +50,9 @@
     "web-app"
   ],
   "author": "QOnCommand",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=22.0.0"
   },
   "build": {
     "appId": "com.qoncommand.app",

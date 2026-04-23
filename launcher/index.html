@@ -188,12 +188,7 @@
                 console.log('shouldAutoStart:', this.shouldAutoStart, '(type:', typeof this.shouldAutoStart, ')');
                 console.log('serverRunning:', this.serverRunning);
                 console.log('autostartToggle.checked:', this.autostartToggle.checked);
-                
-                // EMERGENCY KILL SWITCH - Remove this line once working
-                console.log('🚫 AUTO-START TEMPORARILY DISABLED FOR DEBUGGING');
-                this.addLogEntry({ message: 'Auto-start temporarily disabled for debugging', level: 'info' });
-                return;
-                
+
                 // Triple check - use toggle state as backup
                 const shouldStart = (this.shouldAutoStart === true) && (this.autostartToggle.checked === true) && (!this.serverRunning);
                 console.log('Final decision - shouldStart:', shouldStart);
