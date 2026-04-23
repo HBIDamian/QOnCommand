@@ -337,19 +337,23 @@ h3.h5 {
 }
 
 .transport-stack {
+  --transport-gap: clamp(0.4rem, 1.7vw, 0.78rem);
+  --transport-btn-size: min(4.15rem, calc((100% - (var(--transport-gap) * 4)) / 5.19));
+  --transport-btn-size-lg: min(4.95rem, calc(var(--transport-btn-size) * 1.19));
   width: min(100%, 34rem);
   margin-inline: auto;
   display: flex !important;
   justify-content: center;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.78rem;
+  flex-wrap: nowrap;
+  gap: var(--transport-gap);
 }
 
 .btn-icon {
-  width: 4.15rem;
-  height: 4.15rem;
-  flex: 0 0 auto;
+  width: var(--transport-btn-size);
+  flex: 0 1 var(--transport-btn-size);
+  min-width: 0;
+  aspect-ratio: 1;
   border-radius: var(--qc-radius-md);
   border: 1px solid #4d5865;
   background: linear-gradient(180deg, #313a45, #242c35);
@@ -362,13 +366,14 @@ h3.h5 {
 }
 
 .btn-icon.lg {
-  width: 4.95rem;
-  height: 4.95rem;
+  width: var(--transport-btn-size-lg);
+  flex-basis: var(--transport-btn-size-lg);
 }
 
 .btn-icon svg {
-  width: 2rem;
-  height: 2rem;
+  width: clamp(1.4rem, 44%, 2rem);
+  height: clamp(1.4rem, 44%, 2rem);
+  flex: 0 0 auto;
 }
 
 .btn-icon:hover {
@@ -803,29 +808,6 @@ select:focus-visible {
     font-size: 0.72rem;
   }
 
-  .transport-stack {
-    gap: 0.62rem;
-  }
-
-  .btn-icon {
-    width: 3.55rem;
-    height: 3.55rem;
-  }
-
-  .btn-icon.lg {
-    width: 4.2rem;
-    height: 4.2rem;
-  }
-
-  .btn-icon svg {
-    width: 1.7rem;
-    height: 1.7rem;
-  }
-
-  .btn-icon.lg:hover {
-    transform: translateY(-1px);
-  }
-
   .cue-highlight {
     padding: 0.85rem;
   }
@@ -862,26 +844,6 @@ select:focus-visible {
 
   .connection-status {
     font-size: 0.66rem;
-  }
-
-  .transport-stack {
-    width: 100%;
-    gap: 0.52rem;
-  }
-
-  .btn-icon {
-    width: 3.3rem;
-    height: 3.3rem;
-  }
-
-  .btn-icon.lg {
-    width: 3.95rem;
-    height: 3.95rem;
-  }
-
-  .btn-icon svg {
-    width: 1.58rem;
-    height: 1.58rem;
   }
 
   .cue-number {
