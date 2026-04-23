@@ -345,11 +345,12 @@ h3.h5 {
   display: flex !important;
   justify-content: center;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: nowrap !important;
   gap: var(--transport-gap);
 }
 
 .btn-icon {
+  box-sizing: border-box;
   width: var(--transport-btn-size);
   flex: 0 1 var(--transport-btn-size);
   min-width: 0;
